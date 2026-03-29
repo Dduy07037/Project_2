@@ -1,0 +1,6 @@
+@ExamGuard.Api_HostAddress = http://localhost:5216
+
+GET {{ExamGuard.Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
