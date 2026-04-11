@@ -7,7 +7,9 @@ using ExamGuard.Core.Entities;
 using ExamGuard.Core.Enums;
 using ExamGuard.Core.Exceptions;
 using ExamGuard.Core.Interfaces;
+using ExamGuard.Core.Security;
 using ExamGuard.Data;
+using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -28,21 +30,17 @@ public class AuthService : IAuthService
         _logger = logger;
     }
 
-    // ═══════════════════════════════════════════════
-    //  LOGIN
-    // ═══════════════════════════════════════════════
-    public async Task<LoginResponse> LoginAsync(LoginRequest request, string? ipAddress)
+    public async Task<LoginResponse> LoginAsync(LoginRequest request, string? ipAddress, string? userAgent)
     {
-        var user = await _db.Users.FirstOrDefaultAsync(u => u.Email == request.Email);
+        var normalizedEmail = request.Email.Trim().ToLowerInvariant();
+        var user = await _db.Users.FirstOrDefaultAsync(u => u.Email == normalizedEmail);
 
         if (user == null || !BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
         {
-            // Increment failed login counter if user exists
             if (user != null)
             {
                 user.FailedLoginCount++;
 
-                // Lock after N failed attempts (read from system settings)
                 var maxAttempts = await GetSettingIntAsync("MaxLoginAttempts", 5);
                 if (user.FailedLoginCount >= maxAttempts)
                 {
@@ -53,113 +51,114 @@ public class AuthService : IAuthService
                 await _db.SaveChangesAsync();
             }
 
-            throw new UnauthorizedException("Email hoặc mật khẩu không chính xác.");
+            throw new UnauthorizedException("Invalid email or password.");
         }
 
-        // Check account status
         if (user.Status == UserStatus.Disabled)
-            throw new UnauthorizedException("Tài khoản đã bị vô hiệu hóa.");
-        if (user.Status == UserStatus.Locked)
-            throw new UnauthorizedException("Tài khoản đã bị khóa do đăng nhập sai quá nhiều lần.");
+            throw new UnauthorizedException("This account is disabled.");
 
-        // Reset failed login count on success
+        if (user.Status == UserStatus.Locked)
+            throw new UnauthorizedException("This account is locked.");
+
         user.FailedLoginCount = 0;
         user.LastLoginAt = DateTime.UtcNow;
         await _db.SaveChangesAsync();
 
-        return await GenerateAuthResponse(user, ipAddress);
+        return await GenerateAuthResponse(user, ipAddress, userAgent);
     }
 
-    // ═══════════════════════════════════════════════
-    //  REFRESH TOKEN
-    // ═══════════════════════════════════════════════
-    public async Task<LoginResponse> RefreshTokenAsync(string refreshToken, string? ipAddress)
+    public async Task<LoginResponse> RefreshTokenAsync(string refreshToken, string? ipAddress, string? userAgent)
     {
+        var tokenHash = ComputeTokenHash(refreshToken);
         var storedToken = await _db.RefreshTokens
             .Include(r => r.User)
-            .FirstOrDefaultAsync(r => r.Token == refreshToken);
+            .FirstOrDefaultAsync(r => r.TokenHash == tokenHash);
 
         if (storedToken == null)
-            throw new UnauthorizedException("Refresh token không hợp lệ.");
+            throw new UnauthorizedException("Invalid refresh token.");
 
-        // Detect token reuse attack: if token was already revoked, revoke all descendant tokens
         if (storedToken.IsRevoked)
         {
-            _logger.LogWarning("Detected reuse of revoked refresh token for user {UserId}. Revoking all tokens.", storedToken.UserId);
-            await RevokeAllTokensForUser(storedToken.UserId, ipAddress, "Reuse of revoked token detected");
-            throw new UnauthorizedException("Token đã bị thu hồi. Vui lòng đăng nhập lại.");
+            _logger.LogWarning("Detected refresh token reuse for user {UserId}.", storedToken.UserId);
+            await RevokeAllTokensForUser(storedToken.UserId, ipAddress, "Refresh token reuse detected");
+            throw new UnauthorizedException("Refresh token has already been revoked.");
         }
 
         if (storedToken.IsExpired)
-            throw new UnauthorizedException("Refresh token đã hết hạn.");
+            throw new UnauthorizedException("Refresh token has expired.");
 
         if (storedToken.User.Status != UserStatus.Active)
-            throw new UnauthorizedException("Tài khoản không khả dụng.");
+            throw new UnauthorizedException("Account is not active.");
 
-        // Rotate: revoke current, create new
-        var newRefreshToken = GenerateRefreshToken(storedToken.UserId, ipAddress);
+        storedToken.LastUsedAt = DateTime.UtcNow;
+        storedToken.LastUsedByIp = ipAddress;
+        storedToken.LastUsedByUserAgent = userAgent;
+
+        var rotatedToken = CreateRefreshToken(storedToken.UserId, storedToken.SessionId, ipAddress, userAgent);
         storedToken.RevokedAt = DateTime.UtcNow;
         storedToken.RevokedByIp = ipAddress;
-        storedToken.ReplacedByToken = newRefreshToken.Token;
+        storedToken.RevocationReason = "Rotated";
+        storedToken.ReplacedByTokenHash = rotatedToken.Entity.TokenHash;
 
-        _db.RefreshTokens.Add(newRefreshToken);
+        _db.RefreshTokens.Add(rotatedToken.Entity);
         await _db.SaveChangesAsync();
 
-        var accessToken = GenerateAccessToken(storedToken.User);
+        var accessToken = GenerateAccessToken(storedToken.User, storedToken.SessionId);
+        var activeSessionCount = await GetActiveSessionCountAsync(storedToken.UserId);
 
         return new LoginResponse
         {
             AccessToken = accessToken.Token,
             AccessTokenExpires = accessToken.Expires,
-            RefreshToken = newRefreshToken.Token,
+            RefreshToken = rotatedToken.RawToken,
+            RefreshTokenExpires = rotatedToken.Entity.ExpiresAt,
+            SessionId = storedToken.SessionId,
+            ActiveSessionCount = activeSessionCount,
+            ConcurrentSessionDetected = activeSessionCount > 1,
             User = MapToUserInfo(storedToken.User)
         };
     }
 
-    // ═══════════════════════════════════════════════
-    //  REVOKE (LOGOUT)
-    // ═══════════════════════════════════════════════
-    public async Task RevokeTokenAsync(string refreshToken, string? ipAddress)
+    public async Task RevokeTokenAsync(Guid userId, string refreshToken, string? ipAddress, string? userAgent)
     {
-        var storedToken = await _db.RefreshTokens.FirstOrDefaultAsync(r => r.Token == refreshToken);
+        var tokenHash = ComputeTokenHash(refreshToken);
+        var storedToken = await _db.RefreshTokens
+            .FirstOrDefaultAsync(r => r.TokenHash == tokenHash && r.UserId == userId);
 
         if (storedToken == null || !storedToken.IsActive)
-            throw new UnauthorizedException("Refresh token không hợp lệ.");
+            throw new UnauthorizedException("Invalid refresh token.");
 
         storedToken.RevokedAt = DateTime.UtcNow;
         storedToken.RevokedByIp = ipAddress;
+        storedToken.RevocationReason = "Logout";
+        storedToken.LastUsedAt = DateTime.UtcNow;
+        storedToken.LastUsedByIp = ipAddress;
+        storedToken.LastUsedByUserAgent = userAgent;
         await _db.SaveChangesAsync();
 
-        _logger.LogInformation("Refresh token revoked for user {UserId} from IP {Ip}.", storedToken.UserId, ipAddress);
+        _logger.LogInformation("Refresh token revoked for user {UserId}.", storedToken.UserId);
     }
 
-    // ═══════════════════════════════════════════════
-    //  CHANGE PASSWORD
-    // ═══════════════════════════════════════════════
     public async Task ChangePasswordAsync(Guid userId, ChangePasswordRequest request)
     {
         var user = await _db.Users.FindAsync(userId)
             ?? throw new NotFoundException("User", userId);
 
         if (!BCrypt.Net.BCrypt.Verify(request.CurrentPassword, user.PasswordHash))
-            throw new AppException("Mật khẩu hiện tại không chính xác.");
+            throw new AppException("Current password is incorrect.");
 
         if (request.NewPassword.Length < 6)
-            throw new AppException("Mật khẩu mới phải có ít nhất 6 ký tự.");
+            throw new AppException("New password must be at least 6 characters.");
 
         user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.NewPassword);
         user.UpdatedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync();
 
-        // Revoke all refresh tokens after password change (security)
         await RevokeAllTokensForUser(userId, null, "Password changed");
 
         _logger.LogInformation("Password changed for user {UserId}.", userId);
     }
 
-    // ═══════════════════════════════════════════════
-    //  GET CURRENT USER
-    // ═══════════════════════════════════════════════
     public async Task<UserInfo> GetCurrentUserAsync(Guid userId)
     {
         var user = await _db.Users.FindAsync(userId)
@@ -168,28 +167,37 @@ public class AuthService : IAuthService
         return MapToUserInfo(user);
     }
 
-    // ═══════════════════════════════════════════════
-    //  PRIVATE: Token Generation
-    // ═══════════════════════════════════════════════
-
-    private async Task<LoginResponse> GenerateAuthResponse(User user, string? ipAddress)
+    private async Task<LoginResponse> GenerateAuthResponse(User user, string? ipAddress, string? userAgent)
     {
-        var accessToken = GenerateAccessToken(user);
-        var refreshToken = GenerateRefreshToken(user.Id, ipAddress);
+        var refreshToken = CreateRefreshToken(user.Id, Guid.NewGuid(), ipAddress, userAgent);
+        var accessToken = GenerateAccessToken(user, refreshToken.Entity.SessionId);
 
-        _db.RefreshTokens.Add(refreshToken);
+        _db.RefreshTokens.Add(refreshToken.Entity);
         await _db.SaveChangesAsync();
+
+        var activeSessionCount = await GetActiveSessionCountAsync(user.Id);
+        if (activeSessionCount > 1)
+        {
+            _logger.LogWarning(
+                "Concurrent authenticated sessions detected for user {UserId}. Active sessions: {Count}",
+                user.Id,
+                activeSessionCount);
+        }
 
         return new LoginResponse
         {
             AccessToken = accessToken.Token,
             AccessTokenExpires = accessToken.Expires,
-            RefreshToken = refreshToken.Token,
+            RefreshToken = refreshToken.RawToken,
+            RefreshTokenExpires = refreshToken.Entity.ExpiresAt,
+            SessionId = refreshToken.Entity.SessionId,
+            ActiveSessionCount = activeSessionCount,
+            ConcurrentSessionDetected = activeSessionCount > 1,
             User = MapToUserInfo(user)
         };
     }
 
-    private (string Token, DateTime Expires) GenerateAccessToken(User user)
+    private (string Token, DateTime Expires) GenerateAccessToken(User user, Guid sessionId)
     {
         var secret = _config["JwtSettings:Secret"]!;
         var issuer = _config["JwtSettings:Issuer"]!;
@@ -203,11 +211,14 @@ public class AuthService : IAuthService
         var claims = new List<Claim>
         {
             new(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
+            new(ClaimTypes.NameIdentifier, user.Id.ToString()),
             new(JwtRegisteredClaimNames.Email, user.Email),
+            new(ClaimTypes.Email, user.Email),
             new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
             new(ClaimTypes.Role, user.Role.ToString()),
-            new("userId", user.Id.ToString()),
-            new("role", user.Role.ToString())
+            new(AppClaimTypes.UserId, user.Id.ToString()),
+            new(ClaimTypes.Sid, sessionId.ToString()),
+            new(AppClaimTypes.SessionId, sessionId.ToString())
         };
 
         var token = new JwtSecurityToken(
@@ -221,21 +232,29 @@ public class AuthService : IAuthService
         return (new JwtSecurityTokenHandler().WriteToken(token), expires);
     }
 
-    private static RefreshToken GenerateRefreshToken(Guid userId, string? ipAddress)
+    private (RefreshToken Entity, string RawToken) CreateRefreshToken(Guid userId, Guid sessionId, string? ipAddress, string? userAgent)
     {
         var randomBytes = new byte[64];
         using var rng = RandomNumberGenerator.Create();
         rng.GetBytes(randomBytes);
 
-        return new RefreshToken
+        var rawToken = WebEncoders.Base64UrlEncode(randomBytes);
+        var expiresAt = DateTime.UtcNow.AddDays(int.Parse(_config["JwtSettings:RefreshTokenExpirationDays"] ?? "7"));
+
+        return (new RefreshToken
         {
             Id = Guid.NewGuid(),
             UserId = userId,
-            Token = Convert.ToBase64String(randomBytes),
-            ExpiresAt = DateTime.UtcNow.AddDays(7),
+            SessionId = sessionId,
+            TokenHash = ComputeTokenHash(rawToken),
+            ExpiresAt = expiresAt,
             CreatedAt = DateTime.UtcNow,
-            CreatedByIp = ipAddress
-        };
+            CreatedByIp = ipAddress,
+            CreatedByUserAgent = userAgent,
+            LastUsedAt = DateTime.UtcNow,
+            LastUsedByIp = ipAddress,
+            LastUsedByUserAgent = userAgent
+        }, rawToken);
     }
 
     private async Task RevokeAllTokensForUser(Guid userId, string? ipAddress, string reason)
@@ -248,13 +267,13 @@ public class AuthService : IAuthService
         {
             token.RevokedAt = DateTime.UtcNow;
             token.RevokedByIp = ipAddress;
+            token.RevocationReason = reason;
         }
 
         if (activeTokens.Count > 0)
         {
             await _db.SaveChangesAsync();
-            _logger.LogInformation("Revoked {Count} active refresh tokens for user {UserId}. Reason: {Reason}",
-                activeTokens.Count, userId, reason);
+            _logger.LogInformation("Revoked {Count} refresh tokens for user {UserId}. Reason: {Reason}", activeTokens.Count, userId, reason);
         }
     }
 
@@ -271,6 +290,21 @@ public class AuthService : IAuthService
     private async Task<int> GetSettingIntAsync(string key, int defaultValue)
     {
         var setting = await _db.SystemSettings.FindAsync(key);
-        return setting != null && int.TryParse(setting.Value, out var val) ? val : defaultValue;
+        return setting != null && int.TryParse(setting.Value, out var value) ? value : defaultValue;
+    }
+
+    private async Task<int> GetActiveSessionCountAsync(Guid userId)
+    {
+        return await _db.RefreshTokens
+            .Where(r => r.UserId == userId && r.RevokedAt == null && r.ExpiresAt > DateTime.UtcNow)
+            .Select(r => r.SessionId)
+            .Distinct()
+            .CountAsync();
+    }
+
+    private static string ComputeTokenHash(string token)
+    {
+        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(token));
+        return Convert.ToHexString(bytes);
     }
 }

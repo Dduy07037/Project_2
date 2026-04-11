@@ -24,7 +24,6 @@ public class UserService : IUserService
     {
         var query = _db.Users.AsQueryable();
 
-        // ─── Filters ───
         if (!string.IsNullOrWhiteSpace(filter.Search))
         {
             var search = filter.Search.ToLower();
@@ -42,16 +41,15 @@ public class UserService : IUserService
 
         var totalCount = await query.CountAsync();
 
-        var items = await query
+        var users = await query
             .OrderByDescending(u => u.CreatedAt)
             .Skip((filter.Page - 1) * filter.PageSize)
             .Take(filter.PageSize)
-            .Select(u => MapToDto(u))
             .ToListAsync();
 
         return new PagedResult<UserDto>
         {
-            Items = items,
+            Items = users.Select(MapToDto).ToList(),
             TotalCount = totalCount,
             Page = filter.Page,
             PageSize = filter.PageSize
@@ -62,25 +60,25 @@ public class UserService : IUserService
     {
         var user = await _db.Users.FindAsync(id)
             ?? throw new NotFoundException("User", id);
+
         return MapToDto(user);
     }
 
     public async Task<UserDto> CreateUserAsync(CreateUserRequest request)
     {
-        // Validate email uniqueness
         if (await _db.Users.AnyAsync(u => u.Email == request.Email))
-            throw new ConflictException($"Email '{request.Email}' đã được sử dụng.");
+            throw new ConflictException($"Email '{request.Email}' is already in use.");
 
         if (!Enum.TryParse<UserRole>(request.Role, true, out var role))
-            throw new AppException($"Role '{request.Role}' không hợp lệ. Chọn: Admin, Lecturer, Student.");
+            throw new AppException($"Role '{request.Role}' is invalid. Use Admin, Lecturer, or Student.");
 
         if (string.IsNullOrWhiteSpace(request.Password) || request.Password.Length < 6)
-            throw new AppException("Mật khẩu phải có ít nhất 6 ký tự.");
+            throw new AppException("Password must be at least 6 characters.");
 
         var user = new User
         {
             Id = Guid.NewGuid(),
-            Email = request.Email.Trim().ToLower(),
+            Email = request.Email.Trim().ToLowerInvariant(),
             PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password),
             FullName = request.FullName.Trim(),
             Role = role,
@@ -118,12 +116,11 @@ public class UserService : IUserService
             ?? throw new NotFoundException("User", id);
 
         if (!Enum.TryParse<UserStatus>(request.Status, true, out var status))
-            throw new AppException($"Status '{request.Status}' không hợp lệ. Chọn: Active, Disabled, Locked.");
+            throw new AppException($"Status '{request.Status}' is invalid. Use Active, Disabled, or Locked.");
 
         user.Status = status;
         user.UpdatedAt = DateTime.UtcNow;
 
-        // Reset failed login count when unlocking
         if (status == UserStatus.Active)
             user.FailedLoginCount = 0;
 
@@ -137,25 +134,35 @@ public class UserService : IUserService
             ?? throw new NotFoundException("User", id);
 
         if (string.IsNullOrWhiteSpace(newPassword) || newPassword.Length < 6)
-            throw new AppException("Mật khẩu mới phải có ít nhất 6 ký tự.");
+            throw new AppException("New password must be at least 6 characters.");
 
         user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(newPassword);
         user.UpdatedAt = DateTime.UtcNow;
-        await _db.SaveChangesAsync();
 
-        _logger.LogInformation("Password reset for user {Id}", id);
+        var activeTokens = await _db.RefreshTokens
+            .Where(r => r.UserId == id && r.RevokedAt == null && r.ExpiresAt > DateTime.UtcNow)
+            .ToListAsync();
+
+        foreach (var token in activeTokens)
+        {
+            token.RevokedAt = DateTime.UtcNow;
+            token.RevocationReason = "Admin password reset";
+        }
+
+        await _db.SaveChangesAsync();
+        _logger.LogInformation("Password reset for user {Id}. Revoked {Count} refresh tokens.", id, activeTokens.Count);
     }
 
-    private static UserDto MapToDto(User u) => new()
+    private static UserDto MapToDto(User user) => new()
     {
-        Id = u.Id,
-        Email = u.Email,
-        FullName = u.FullName,
-        Role = u.Role.ToString(),
-        StudentCode = u.StudentCode,
-        Department = u.Department,
-        Status = u.Status.ToString(),
-        LastLoginAt = u.LastLoginAt,
-        CreatedAt = u.CreatedAt
+        Id = user.Id,
+        Email = user.Email,
+        FullName = user.FullName,
+        Role = user.Role.ToString(),
+        StudentCode = user.StudentCode,
+        Department = user.Department,
+        Status = user.Status.ToString(),
+        LastLoginAt = user.LastLoginAt,
+        CreatedAt = user.CreatedAt
     };
 }

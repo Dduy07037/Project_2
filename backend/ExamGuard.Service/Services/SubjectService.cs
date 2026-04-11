@@ -25,7 +25,6 @@ public class SubjectService : ISubjectService
             .Include(s => s.CreatedBy)
             .AsQueryable();
 
-        // Lecturer only sees their own subjects
         if (lecturerId.HasValue)
             query = query.Where(s => s.CreatedById == lecturerId.Value);
 
@@ -47,37 +46,40 @@ public class SubjectService : ISubjectService
             .ToListAsync();
     }
 
-    public async Task<SubjectDto> GetSubjectByIdAsync(Guid id)
+    public async Task<SubjectDto> GetSubjectByIdAsync(Guid id, Guid currentUserId, bool isAdmin)
     {
-        var s = await _db.Subjects
+        var subject = await _db.Subjects
             .Include(s => s.CreatedBy)
             .FirstOrDefaultAsync(s => s.Id == id)
             ?? throw new NotFoundException("Subject", id);
 
+        if (!isAdmin && subject.CreatedById != currentUserId)
+            throw new ForbiddenException("You do not have permission to view this subject.");
+
         return new SubjectDto
         {
-            Id = s.Id,
-            Code = s.Code,
-            Name = s.Name,
-            Department = s.Department,
-            CreatedById = s.CreatedById,
-            CreatedByName = s.CreatedBy.FullName,
+            Id = subject.Id,
+            Code = subject.Code,
+            Name = subject.Name,
+            Department = subject.Department,
+            CreatedById = subject.CreatedById,
+            CreatedByName = subject.CreatedBy.FullName,
             QuestionCount = await _db.Questions.CountAsync(q => q.SubjectId == id && q.IsActive),
             ExamCount = await _db.Exams.CountAsync(e => e.SubjectId == id),
-            IsActive = s.IsActive,
-            CreatedAt = s.CreatedAt
+            IsActive = subject.IsActive,
+            CreatedAt = subject.CreatedAt
         };
     }
 
     public async Task<SubjectDto> CreateSubjectAsync(CreateSubjectRequest request, Guid currentUserId)
     {
         if (await _db.Subjects.AnyAsync(s => s.Code == request.Code))
-            throw new ConflictException($"Mã môn học '{request.Code}' đã tồn tại.");
+            throw new ConflictException($"Subject code '{request.Code}' already exists.");
 
         var subject = new Subject
         {
             Id = Guid.NewGuid(),
-            Code = request.Code.Trim().ToUpper(),
+            Code = request.Code.Trim().ToUpperInvariant(),
             Name = request.Name.Trim(),
             Department = request.Department?.Trim(),
             CreatedById = request.CreatedById ?? currentUserId,
@@ -89,7 +91,7 @@ public class SubjectService : ISubjectService
         await _db.SaveChangesAsync();
 
         _logger.LogInformation("Subject created: {Code} by user {UserId}", subject.Code, currentUserId);
-        return await GetSubjectByIdAsync(subject.Id);
+        return await GetSubjectByIdAsync(subject.Id, currentUserId, false);
     }
 
     public async Task<SubjectDto> UpdateSubjectAsync(Guid id, UpdateSubjectRequest request, Guid currentUserId, bool isAdmin)
@@ -97,9 +99,8 @@ public class SubjectService : ISubjectService
         var subject = await _db.Subjects.FindAsync(id)
             ?? throw new NotFoundException("Subject", id);
 
-        // Object-level auth: only owner or admin
         if (!isAdmin && subject.CreatedById != currentUserId)
-            throw new ForbiddenException("Bạn không có quyền chỉnh sửa môn học này.");
+            throw new ForbiddenException("You do not have permission to update this subject.");
 
         subject.Name = request.Name.Trim();
         subject.Department = request.Department?.Trim();
@@ -107,13 +108,16 @@ public class SubjectService : ISubjectService
         subject.UpdatedAt = DateTime.UtcNow;
 
         await _db.SaveChangesAsync();
-        return await GetSubjectByIdAsync(id);
+        return await GetSubjectByIdAsync(id, currentUserId, isAdmin);
     }
 
-    public async Task<List<CategoryDto>> GetCategoriesAsync(Guid subjectId)
+    public async Task<List<CategoryDto>> GetCategoriesAsync(Guid subjectId, Guid currentUserId, bool isAdmin)
     {
-        if (!await _db.Subjects.AnyAsync(s => s.Id == subjectId))
-            throw new NotFoundException("Subject", subjectId);
+        var subject = await _db.Subjects.FindAsync(subjectId)
+            ?? throw new NotFoundException("Subject", subjectId);
+
+        if (!isAdmin && subject.CreatedById != currentUserId)
+            throw new ForbiddenException("You do not have permission to view categories for this subject.");
 
         return await _db.QuestionCategories
             .Where(c => c.SubjectId == subjectId)
@@ -135,7 +139,7 @@ public class SubjectService : ISubjectService
             ?? throw new NotFoundException("Subject", subjectId);
 
         if (!isAdmin && subject.CreatedById != currentUserId)
-            throw new ForbiddenException("Bạn không có quyền thêm chủ đề cho môn học này.");
+            throw new ForbiddenException("You do not have permission to add categories to this subject.");
 
         var category = new QuestionCategory
         {
@@ -166,7 +170,7 @@ public class SubjectService : ISubjectService
             ?? throw new NotFoundException("Category", categoryId);
 
         if (!isAdmin && category.Subject.CreatedById != currentUserId)
-            throw new ForbiddenException("Bạn không có quyền xóa chủ đề này.");
+            throw new ForbiddenException("You do not have permission to delete this category.");
 
         _db.QuestionCategories.Remove(category);
         await _db.SaveChangesAsync();

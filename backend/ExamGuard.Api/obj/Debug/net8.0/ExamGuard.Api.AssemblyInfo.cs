@@ -10,10 +10,11 @@
 using System;
 using System.Reflection;
 
+[assembly: Microsoft.Extensions.Configuration.UserSecrets.UserSecretsIdAttribute("examguard-api-a1b2c3d4-e5f6-7890-abcd-ef1234567890")]
 [assembly: System.Reflection.AssemblyCompanyAttribute("ExamGuard.Api")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+6422289b4e1f72963a415c3194fb9fdf178d35fb")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+1c514a0b6929683a0fa7feff59aa140a7087702c")]
 [assembly: System.Reflection.AssemblyProductAttribute("ExamGuard.Api")]
 [assembly: System.Reflection.AssemblyTitleAttribute("ExamGuard.Api")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

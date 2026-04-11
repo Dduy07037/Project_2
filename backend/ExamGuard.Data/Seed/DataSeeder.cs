@@ -1,8 +1,12 @@
+using ExamGuard.Core.Configuration;
 using ExamGuard.Core.Entities;
 using ExamGuard.Core.Enums;
+using ExamGuard.Data.Graph;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using Neo4j.Driver;
 
 namespace ExamGuard.Data.Seed;
 
@@ -19,30 +23,133 @@ public static class DataSeeder
             await context.Database.MigrateAsync();
             logger.LogInformation("Database migrated successfully.");
 
-            if (await context.Users.AnyAsync())
+            if (!await context.Users.AnyAsync())
             {
-                logger.LogInformation("Database already seeded. Skipping.");
-                return;
+                await SeedUsers(context);
+                await SeedSubjectsAndCategories(context);
+                await SeedQuestions(context);
+                await SeedSystemSettings(context);
+                await context.SaveChangesAsync();
+                logger.LogInformation("Seed data inserted successfully.");
             }
-
-            await SeedUsers(context);
-            await SeedSubjectsAndCategories(context);
-            await SeedQuestions(context);
-            await SeedSystemSettings(context);
-
-            await context.SaveChangesAsync();
-            logger.LogInformation("Seed data inserted successfully.");
+            else
+            {
+                logger.LogInformation("Database already seeded. Skipping relational seed.");
+            }
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Error seeding database.");
+            logger.LogError(ex, "Error seeding relational database.");
             throw;
+        }
+
+        await TrySeedNeo4jAsync(scope.ServiceProvider, context);
+    }
+
+    private static async Task TrySeedNeo4jAsync(IServiceProvider scopedProvider, AppDbContext context)
+    {
+        var neoLogger = scopedProvider.GetRequiredService<ILoggerFactory>().CreateLogger("Neo4jGraphSeeder");
+        try
+        {
+            var driver = scopedProvider.GetService<IDriver>();
+            var bootstrapper = scopedProvider.GetService<Neo4jGraphBootstrapper>();
+            if (driver == null || bootstrapper == null)
+            {
+                neoLogger.LogInformation(
+                    "Neo4j Aura driver not registered (missing or placeholder config). Skipping graph bootstrap; set Neo4jAura:Uri/Username/Password (user-secrets or env).");
+                return;
+            }
+
+            var options = scopedProvider.GetRequiredService<IOptions<Neo4jAuraOptions>>().Value;
+
+            await bootstrapper.InitializeSchemaAsync();
+
+            await using var session = driver.AsyncSession(config => config.WithDatabase(options.Database));
+            var countCursor = await session.RunAsync("MATCH (u:User) RETURN count(u) AS c");
+            var countRecord = await countCursor.SingleAsync();
+            if (countRecord["c"].As<long>() > 0)
+            {
+                neoLogger.LogInformation("Neo4j graph already has User nodes. Skipping graph user/settings sync.");
+                return;
+            }
+
+            var efUsers = await context.Users.AsNoTracking().ToListAsync();
+            if (efUsers.Count == 0)
+            {
+                neoLogger.LogInformation("No users in PostgreSQL; skipping Neo4j user seed.");
+                return;
+            }
+
+            var efSettings = await context.SystemSettings.AsNoTracking().ToListAsync();
+
+            await session.ExecuteWriteAsync(async tx =>
+            {
+                foreach (var u in efUsers)
+                {
+                    await tx.RunAsync(
+                        """
+                        MERGE (n:User {id: $id})
+                        SET n.email = $email,
+                            n.passwordHash = $passwordHash,
+                            n.fullName = $fullName,
+                            n.studentCode = $studentCode,
+                            n.role = $role,
+                            n.status = $status,
+                            n.department = $department,
+                            n.failedLoginCount = $failedLoginCount,
+                            n.createdAt = datetime($createdAt),
+                            n.updatedAt = datetime($updatedAt),
+                            n.lastLoginAt = CASE WHEN $lastLoginAt IS NULL THEN NULL ELSE datetime($lastLoginAt) END
+                        """,
+                        new
+                        {
+                            id = u.Id.ToString(),
+                            email = u.Email,
+                            passwordHash = u.PasswordHash,
+                            fullName = u.FullName,
+                            studentCode = u.StudentCode ?? string.Empty,
+                            role = u.Role.ToString(),
+                            status = u.Status.ToString(),
+                            department = u.Department ?? string.Empty,
+                            failedLoginCount = u.FailedLoginCount,
+                            createdAt = u.CreatedAt.ToUniversalTime().ToString("o"),
+                            updatedAt = u.UpdatedAt.ToUniversalTime().ToString("o"),
+                            lastLoginAt = u.LastLoginAt.HasValue ? u.LastLoginAt.Value.ToUniversalTime().ToString("o") : (string?)null
+                        });
+                }
+
+                foreach (var s in efSettings)
+                {
+                    await tx.RunAsync(
+                        """
+                        MERGE (ss:SystemSetting {key: $key})
+                        SET ss.value = $value,
+                            ss.description = $description,
+                            ss.updatedAt = datetime($updatedAt)
+                        """,
+                        new
+                        {
+                            key = s.Key,
+                            value = s.Value,
+                            description = s.Description ?? string.Empty,
+                            updatedAt = s.UpdatedAt.ToUniversalTime().ToString("o")
+                        });
+                }
+            });
+
+            neoLogger.LogInformation(
+                "Neo4j graph seed completed: {UserCount} users, {SettingCount} system settings synced from PostgreSQL.",
+                efUsers.Count,
+                efSettings.Count);
+        }
+        catch (Exception ex)
+        {
+            neoLogger.LogWarning(ex, "Neo4j graph bootstrap/seed failed; API will continue using PostgreSQL only.");
         }
     }
 
     private static async Task SeedUsers(AppDbContext context)
     {
-        // Password: "Password123!" for all seed users
         var passwordHash = BCrypt.Net.BCrypt.HashPassword("Password123!");
 
         var users = new List<User>

@@ -1,14 +1,12 @@
+using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using ExamGuard.Core.Enums;
 using ExamGuard.Core.Interfaces;
+using ExamGuard.Core.Security;
 using Microsoft.AspNetCore.Http;
 
 namespace ExamGuard.Service.Services;
 
-/// <summary>
-/// Extracts the authenticated user's identity from JWT claims.
-/// Registered as Scoped — one instance per HTTP request.
-/// </summary>
 public class CurrentUserService : ICurrentUserService
 {
     private readonly IHttpContextAccessor _httpContextAccessor;
@@ -26,25 +24,35 @@ public class CurrentUserService : ICurrentUserService
     {
         get
         {
-            var sub = User?.FindFirstValue(ClaimTypes.NameIdentifier)
-                   ?? User?.FindFirstValue("sub");
+            var claimValue = User?.FindFirstValue(ClaimTypes.NameIdentifier)
+                ?? User?.FindFirstValue(JwtRegisteredClaimNames.Sub)
+                ?? User?.FindFirstValue(AppClaimTypes.UserId);
 
-            return Guid.TryParse(sub, out var id) ? id : Guid.Empty;
+            return Guid.TryParse(claimValue, out var userId) ? userId : Guid.Empty;
+        }
+    }
+
+    public Guid SessionId
+    {
+        get
+        {
+            var claimValue = User?.FindFirstValue(ClaimTypes.Sid)
+                ?? User?.FindFirstValue(AppClaimTypes.SessionId);
+
+            return Guid.TryParse(claimValue, out var sessionId) ? sessionId : Guid.Empty;
         }
     }
 
     public string Email => User?.FindFirstValue(ClaimTypes.Email)
-                        ?? User?.FindFirstValue("email")
-                        ?? string.Empty;
+        ?? User?.FindFirstValue(JwtRegisteredClaimNames.Email)
+        ?? string.Empty;
 
     public UserRole Role
     {
         get
         {
-            var roleStr = User?.FindFirstValue(ClaimTypes.Role)
-                       ?? User?.FindFirstValue("role");
-
-            return Enum.TryParse<UserRole>(roleStr, true, out var role) ? role : UserRole.Student;
+            var roleValue = User?.FindFirstValue(ClaimTypes.Role) ?? string.Empty;
+            return Enum.TryParse<UserRole>(roleValue, true, out var role) ? role : UserRole.Student;
         }
     }
 

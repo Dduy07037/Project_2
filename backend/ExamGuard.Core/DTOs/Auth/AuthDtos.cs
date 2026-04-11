@@ -1,6 +1,5 @@
 namespace ExamGuard.Core.DTOs.Auth;
 
-// ─── Login ───
 public class LoginRequest
 {
     public string Email { get; set; } = string.Empty;
@@ -12,10 +11,13 @@ public class LoginResponse
     public string AccessToken { get; set; } = string.Empty;
     public string RefreshToken { get; set; } = string.Empty;
     public DateTime AccessTokenExpires { get; set; }
+    public DateTime RefreshTokenExpires { get; set; }
+    public Guid SessionId { get; set; }
+    public int ActiveSessionCount { get; set; }
+    public bool ConcurrentSessionDetected { get; set; }
     public UserInfo User { get; set; } = null!;
 }
 
-// ─── Current User ───
 public class UserInfo
 {
     public Guid Id { get; set; }
@@ -27,19 +29,16 @@ public class UserInfo
     public string? Avatar { get; set; }
 }
 
-// ─── Refresh Token ───
 public class RefreshTokenRequest
 {
     public string RefreshToken { get; set; } = string.Empty;
 }
 
-// ─── Logout ───
 public class LogoutRequest
 {
     public string RefreshToken { get; set; } = string.Empty;
 }
 
-// ─── Change Password ───
 public class ChangePasswordRequest
 {
     public string CurrentPassword { get; set; } = string.Empty;

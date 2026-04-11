@@ -1,21 +1,38 @@
+using System.Security.Claims;
 using System.Text;
 using ExamGuard.Api.Middleware;
+using ExamGuard.Api.Security;
 using ExamGuard.Core.Interfaces;
+using ExamGuard.Core.Security;
 using ExamGuard.Data;
+using ExamGuard.Data.Graph;
 using ExamGuard.Data.Seed;
 using ExamGuard.Service.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// ─── Database ───
-builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+builder.Services.AddNeo4jAura(builder.Configuration);
 
-// ─── Authentication (JWT) ───
+var pgConnection = builder.Configuration.GetConnectionString("DefaultConnection");
+if (string.IsNullOrWhiteSpace(pgConnection))
+{
+    throw new InvalidOperationException(
+        "ConnectionStrings:DefaultConnection is not configured. " +
+        "For local Development, set it with: dotnet user-secrets set \"ConnectionStrings:DefaultConnection\" \"<your-npgsql-string>\" --project ExamGuard.Api");
+}
+
+builder.Services.AddDbContext<AppDbContext>(options =>
+    options.UseNpgsql(pgConnection, npgsql =>
+    {
+        npgsql.EnableRetryOnFailure(5, TimeSpan.FromSeconds(10), null);
+        npgsql.CommandTimeout(120);
+    }));
+
 var jwtSecret = builder.Configuration["JwtSettings:Secret"]
     ?? throw new InvalidOperationException("JwtSettings:Secret is not configured.");
 
@@ -35,13 +52,31 @@ builder.Services.AddAuthentication(options =>
         ValidIssuer = builder.Configuration["JwtSettings:Issuer"],
         ValidAudience = builder.Configuration["JwtSettings:Audience"],
         IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecret)),
+        NameClaimType = ClaimTypes.NameIdentifier,
+        RoleClaimType = ClaimTypes.Role,
         ClockSkew = TimeSpan.FromSeconds(30)
     };
 });
 
-builder.Services.AddAuthorization();
+builder.Services.AddAuthorization(options =>
+{
+    options.FallbackPolicy = new AuthorizationPolicyBuilder()
+        .RequireAuthenticatedUser()
+        .Build();
 
-// ─── Controllers ───
+    options.AddPolicy(AuthorizationPolicies.AdminOnly, policy =>
+        policy.RequireRole(AppRoleNames.Admin));
+
+    options.AddPolicy(AuthorizationPolicies.AdminOrLecturer, policy =>
+        policy.RequireRole(AppRoleNames.Admin, AppRoleNames.Lecturer));
+
+    options.AddPolicy(AuthorizationPolicies.LecturerOnly, policy =>
+        policy.RequireRole(AppRoleNames.Lecturer));
+
+    options.AddPolicy(AuthorizationPolicies.StudentOnly, policy =>
+        policy.RequireRole(AppRoleNames.Student));
+});
+
 builder.Services.AddControllers()
     .AddJsonOptions(options =>
     {
@@ -49,7 +84,6 @@ builder.Services.AddControllers()
         options.JsonSerializerOptions.DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull;
     });
 
-// ─── CORS (allow frontend) ───
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", policy =>
@@ -61,7 +95,6 @@ builder.Services.AddCors(options =>
     });
 });
 
-// ─── Swagger ───
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
 {
@@ -69,10 +102,9 @@ builder.Services.AddSwaggerGen(options =>
     {
         Title = "ExamGuard API",
         Version = "v1",
-        Description = "Hệ thống thi trắc nghiệm online chống gian lận — Backend API"
+        Description = "ExamGuard backend API"
     });
 
-    // JWT Bearer auth in Swagger UI
     options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
         Name = "Authorization",
@@ -82,6 +114,7 @@ builder.Services.AddSwaggerGen(options =>
         In = ParameterLocation.Header,
         Description = "Enter 'Bearer {your_token}'"
     });
+
     options.AddSecurityRequirement(new OpenApiSecurityRequirement
     {
         {
@@ -94,7 +127,6 @@ builder.Services.AddSwaggerGen(options =>
     });
 });
 
-// ─── Application Services ───
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
@@ -105,7 +137,6 @@ builder.Services.AddScoped<IExamService, ExamService>();
 
 var app = builder.Build();
 
-// ─── Middleware Pipeline ───
 app.UseMiddleware<ExceptionMiddleware>();
 
 if (app.Environment.IsDevelopment())
@@ -120,7 +151,6 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 
-// ─── Seed Database ───
 await DataSeeder.SeedAsync(app.Services);
 
 app.Run();

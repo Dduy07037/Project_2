@@ -1,0 +1,9 @@
+MATCH (u:User) RETURN count(u) AS users;
+MATCH (s:Subject) RETURN count(s) AS subjects;
+MATCH (c:Category) RETURN count(c) AS categories;
+MATCH (q:Question) RETURN count(q) AS questions;
+MATCH (o:QuestionOption) RETURN count(o) AS options;
+MATCH (e:Exam) RETURN count(e) AS exams;
+MATCH (es:ExamSession) RETURN count(es) AS sessions;
+MATCH (rt:RefreshToken) RETURN count(rt) AS refreshTokens;
+MATCH (ss:SystemSetting) RETURN count(ss) AS settings;

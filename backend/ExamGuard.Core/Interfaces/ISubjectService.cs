@@ -6,10 +6,10 @@ namespace ExamGuard.Core.Interfaces;
 public interface ISubjectService
 {
     Task<List<SubjectDto>> GetSubjectsAsync(Guid? lecturerId);
-    Task<SubjectDto> GetSubjectByIdAsync(Guid id);
+    Task<SubjectDto> GetSubjectByIdAsync(Guid id, Guid currentUserId, bool isAdmin);
     Task<SubjectDto> CreateSubjectAsync(CreateSubjectRequest request, Guid currentUserId);
     Task<SubjectDto> UpdateSubjectAsync(Guid id, UpdateSubjectRequest request, Guid currentUserId, bool isAdmin);
-    Task<List<CategoryDto>> GetCategoriesAsync(Guid subjectId);
+    Task<List<CategoryDto>> GetCategoriesAsync(Guid subjectId, Guid currentUserId, bool isAdmin);
     Task<CategoryDto> CreateCategoryAsync(Guid subjectId, CreateCategoryRequest request, Guid currentUserId, bool isAdmin);
     Task DeleteCategoryAsync(Guid categoryId, Guid currentUserId, bool isAdmin);
 }
