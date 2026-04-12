@@ -1,11 +1,7 @@
 'use client';
 
-import { AppShell } from '@/components/layout/app-shell';
+import { ProtectedRoleShell } from '@/components/layout/protected-role-shell';
 
 export default function StudentLayout({ children }: { children: React.ReactNode }) {
-    return (
-        <AppShell role="student" userName="Phạm Đức Duy">
-            {children}
-        </AppShell>
-    );
+    return <ProtectedRoleShell role="student">{children}</ProtectedRoleShell>;
 }

@@ -14,3 +14,5 @@ export { ToastProvider, useToast } from './toast';
 export { DataTable, Pagination } from './table';
 
 export { Tabs, Select, Checkbox, Switch, EmptyState, PageHeader, FilterBar } from './tabs';
+
+export { FullscreenState, InlineState } from './page-state';

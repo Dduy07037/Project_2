@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
-import { Shield, ShieldOff, ArrowLeft, Home } from 'lucide-react';
+import { ShieldOff, ArrowLeft, Home } from 'lucide-react';
 import { pageVariants } from '@/lib/motion';
 
 export default function Page403() {

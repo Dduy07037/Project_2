@@ -1,486 +1,465 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
+import { useParams } from 'next/navigation';
+import { AlertCircle, CheckCircle2, ChevronLeft, ChevronRight, Clock, Copy, Loader2, Lock, Send, Shield } from 'lucide-react';
+import { Button, Card, InlineState, Input, PageHeader, StatusBadge } from '@/components/ui';
+import { useToast } from '@/components/ui/toast';
+import { useAuth } from '@/components/providers/auth-provider';
 import { cn } from '@/lib/cn';
-import { Button, Badge, Card } from '@/components/ui';
-import { staggerContainer, staggerItem, scaleFadeVariants } from '@/lib/motion';
-import { mockQuestions } from '@/lib/mock-data';
 import {
-    Clock, Flag, ChevronLeft, ChevronRight, Send, Save,
-    AlertTriangle, CheckCircle2, BookOpen, Eye, EyeOff,
-    LayoutGrid, X, Shield, Zap
-} from 'lucide-react';
+    getAttempt,
+    getAvailableSessions,
+    logAttemptEvent,
+    saveAttemptAnswer,
+    startAttempt,
+    submitAttempt,
+    toStatusKey,
+    type AttemptDetailDto,
+    type AttemptSummaryDto,
+    type AvailableSessionDto,
+} from '@/lib/api/exam-guard';
+import { formatDateTime } from '@/lib/utils';
+
+type EventName = 'TabLeave' | 'TabReturn' | 'PageReload' | 'CopyAttempt' | 'PasteAttempt' | 'RightClick';
 
 export default function ExamTakePage() {
-    const questions = mockQuestions.slice(0, 10);
-    const totalTime = 30 * 60;
+    const { request } = useAuth();
+    const { toast } = useToast();
+    const params = useParams<{ id: string }>();
+    const sessionId = params.id;
 
-    const [currentQ, setCurrentQ] = useState(0);
-    const [answers, setAnswers] = useState<Record<number, string>>({});
-    const [flagged, setFlagged] = useState<Set<number>>(new Set());
-    const [timeLeft, setTimeLeft] = useState(totalTime);
-    const [showNav, setShowNav] = useState(true);
-    const [tabSwitchCount, setTabSwitchCount] = useState(0);
-    const [showTabWarning, setShowTabWarning] = useState(false);
-    const [showConfirm, setShowConfirm] = useState(false);
-    const [submitted, setSubmitted] = useState(false);
+    const [session, setSession] = useState<AvailableSessionDto | null>(null);
+    const [detail, setDetail] = useState<AttemptDetailDto | null>(null);
+    const [submitted, setSubmitted] = useState<AttemptSummaryDto | null>(null);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+    const [password, setPassword] = useState('');
+    const [passwordError, setPasswordError] = useState<string | null>(null);
+    const [questionIndex, setQuestionIndex] = useState(0);
+    const [saving, setSaving] = useState(false);
+    const [submitting, setSubmitting] = useState(false);
     const [autoSaved, setAutoSaved] = useState(false);
+    const [nowMs, setNowMs] = useState(Date.now());
 
-    // Timer
-    useEffect(() => {
-        if (submitted) return;
-        const interval = setInterval(() => {
-            setTimeLeft((prev) => {
-                if (prev <= 1) { setSubmitted(true); return 0; }
-                return prev - 1;
+    const saveBadgeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const reloadLoggedRef = useRef(false);
+
+    const attemptId = detail?.attempt.id;
+    const questions = detail?.questions ?? [];
+    const currentQuestion = questions[questionIndex];
+    const answeredCount = questions.filter((item) => !!item.selectedOptionSnapshotId).length;
+    const expiresAt = detail?.attempt.expiresAt ?? submitted?.expiresAt;
+    const timeLeftSeconds = expiresAt ? Math.max(0, Math.floor((new Date(expiresAt).getTime() - nowMs) / 1000)) : 0;
+
+    const syncSummary = useCallback((summary: AttemptSummaryDto) => {
+        setDetail((current) => current ? { ...current, attempt: summary } : current);
+        if (toStatusKey(summary.status) !== 'in_progress') {
+            setSubmitted(summary);
+        }
+    }, []);
+
+    const showSaved = useCallback(() => {
+        setAutoSaved(true);
+        if (saveBadgeTimeoutRef.current) {
+            clearTimeout(saveBadgeTimeoutRef.current);
+        }
+        saveBadgeTimeoutRef.current = setTimeout(() => setAutoSaved(false), 1500);
+    }, []);
+
+    const logEvent = useCallback(async (eventType: EventName, details?: string) => {
+        if (!attemptId || submitted) {
+            return;
+        }
+
+        try {
+            const result = await logAttemptEvent(request, attemptId, {
+                eventType,
+                details,
+                clientTimestamp: new Date().toISOString(),
             });
-        }, 1000);
-        return () => clearInterval(interval);
+            syncSummary(result.attempt);
+            setDetail((current) => current ? { ...current, recentEvents: result.recentEvents } : current);
+            if (result.autoSubmitted) {
+                toast({ type: 'warning', title: 'Attempt da bi auto-submit', message: result.attempt.flagReason || undefined });
+            }
+        } catch {
+            // event logging should not block the exam screen
+        }
+    }, [attemptId, request, submitted, syncSummary, toast]);
+
+    const boot = useCallback(async (providedPassword?: string) => {
+        setLoading(true);
+        setError(null);
+        setPasswordError(null);
+
+        try {
+            const sessions = await getAvailableSessions(request);
+            const matched = sessions.find((item) => item.sessionId === sessionId);
+            if (!matched) {
+                throw new Error('Session khong ton tai hoac khong con kha dung.');
+            }
+
+            setSession(matched);
+
+            if (matched.attemptId && toStatusKey(matched.attemptStatus) === 'in_progress') {
+                const existing = await getAttempt(request, matched.attemptId);
+                setDetail(existing);
+                if (toStatusKey(existing.attempt.status) !== 'in_progress') {
+                    setSubmitted(existing.attempt);
+                }
+                return;
+            }
+
+            if (toStatusKey(matched.status) !== 'active') {
+                return;
+            }
+
+            if (matched.requiresPassword && !providedPassword) {
+                return;
+            }
+
+            const started = await startAttempt(request, sessionId, providedPassword);
+            setDetail(started);
+            if (toStatusKey(started.attempt.status) !== 'in_progress') {
+                setSubmitted(started.attempt);
+            }
+        } catch (bootError) {
+            const message = bootError instanceof Error ? bootError.message : 'Khong the khoi tao phien thi.';
+            if ((session?.requiresPassword || message.toLowerCase().includes('password')) && !detail) {
+                setPasswordError(message);
+            } else {
+                setError(message);
+            }
+        } finally {
+            setLoading(false);
+        }
+    }, [detail, request, session?.requiresPassword, sessionId]);
+
+    useEffect(() => {
+        if (sessionId) {
+            void boot();
+        }
+    }, [boot, sessionId]);
+
+    useEffect(() => {
+        if (submitted) {
+            return;
+        }
+
+        const timer = setInterval(() => setNowMs(Date.now()), 1000);
+        return () => clearInterval(timer);
     }, [submitted]);
 
-    // Tab switch detection
     useEffect(() => {
+        if (!detail || submitted || timeLeftSeconds > 0) {
+            return;
+        }
+
+        setSubmitting(true);
+        void submitAttempt(request, detail.attempt.id, 'Auto', new Date().toISOString())
+            .then((result) => {
+                setSubmitted(result);
+                syncSummary(result);
+            })
+            .catch((submitError) => {
+                toast({ type: 'error', title: 'Auto-submit that bai', message: submitError instanceof Error ? submitError.message : undefined });
+            })
+            .finally(() => setSubmitting(false));
+    }, [detail, request, submitted, syncSummary, timeLeftSeconds, toast]);
+
+    useEffect(() => {
+        if (!attemptId || submitted || reloadLoggedRef.current) {
+            return;
+        }
+
+        const navEntry = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined;
+        if (navEntry?.type === 'reload') {
+            reloadLoggedRef.current = true;
+            void logEvent('PageReload', 'Browser reload detected');
+        }
+    }, [attemptId, logEvent, submitted]);
+
+    useEffect(() => {
+        if (!attemptId || submitted) {
+            return;
+        }
+
         const handleVisibility = () => {
-            if (document.hidden) {
-                setTabSwitchCount(prev => prev + 1);
-                setShowTabWarning(true);
-            }
+            void logEvent(document.hidden ? 'TabLeave' : 'TabReturn', document.hidden ? 'Document hidden' : 'Returned to exam tab');
         };
+        const handleCopy = (event: Event) => { event.preventDefault(); void logEvent('CopyAttempt', 'Copy blocked'); };
+        const handlePaste = (event: Event) => { event.preventDefault(); void logEvent('PasteAttempt', 'Paste blocked'); };
+        const handleContextMenu = (event: Event) => { event.preventDefault(); void logEvent('RightClick', 'Context menu blocked'); };
+
         document.addEventListener('visibilitychange', handleVisibility);
-        return () => document.removeEventListener('visibilitychange', handleVisibility);
-    }, []);
+        if (!detail?.policy.allowCopyPaste) {
+            document.addEventListener('copy', handleCopy);
+            document.addEventListener('paste', handlePaste);
+            document.addEventListener('contextmenu', handleContextMenu);
+        }
 
-    // Prevent copy/paste
-    useEffect(() => {
-        const prevent = (e: Event) => e.preventDefault();
-        document.addEventListener('copy', prevent);
-        document.addEventListener('paste', prevent);
-        document.addEventListener('contextmenu', prevent);
         return () => {
-            document.removeEventListener('copy', prevent);
-            document.removeEventListener('paste', prevent);
-            document.removeEventListener('contextmenu', prevent);
+            document.removeEventListener('visibilitychange', handleVisibility);
+            document.removeEventListener('copy', handleCopy);
+            document.removeEventListener('paste', handlePaste);
+            document.removeEventListener('contextmenu', handleContextMenu);
         };
-    }, []);
+    }, [attemptId, detail?.policy.allowCopyPaste, logEvent, submitted]);
 
-    // Auto-save indicator
-    useEffect(() => {
-        if (Object.keys(answers).length === 0) return;
-        setAutoSaved(true);
-        const t = setTimeout(() => setAutoSaved(false), 2000);
-        return () => clearTimeout(t);
-    }, [answers]);
+    const selectAnswer = useCallback(async (questionId: string, optionId: string) => {
+        if (!detail) {
+            return;
+        }
 
-    const minutes = Math.floor(timeLeft / 60);
-    const seconds = timeLeft % 60;
-    const timePercent = timeLeft / totalTime;
-    const isWarning = timePercent <= 0.25 && timePercent > 0.08;
-    const isCritical = timePercent <= 0.08;
+        setSaving(true);
+        setDetail((current) => current ? {
+            ...current,
+            questions: current.questions.map((question) => question.id === questionId ? { ...question, selectedOptionSnapshotId: optionId } : question),
+        } : current);
 
-    const answeredCount = Object.keys(answers).length;
-    const progressPercent = (answeredCount / questions.length) * 100;
+        try {
+            const result = await saveAttemptAnswer(request, detail.attempt.id, questionId, optionId, new Date().toISOString());
+            setDetail((current) => current ? {
+                ...current,
+                attempt: { ...current.attempt, answeredQuestions: result.answeredQuestions },
+            } : current);
+            showSaved();
+        } catch (saveError) {
+            toast({ type: 'error', title: 'Luu dap an that bai', message: saveError instanceof Error ? saveError.message : undefined });
+        } finally {
+            setSaving(false);
+        }
+    }, [detail, request, showSaved, toast]);
 
-    const selectAnswer = useCallback((qIdx: number, optId: string) => {
-        setAnswers(prev => ({ ...prev, [qIdx]: optId }));
-    }, []);
+    const handleSubmit = useCallback(async () => {
+        if (!detail) {
+            return;
+        }
 
-    const toggleFlag = useCallback((qIdx: number) => {
-        setFlagged(prev => {
-            const next = new Set(prev);
-            next.has(qIdx) ? next.delete(qIdx) : next.add(qIdx);
-            return next;
-        });
-    }, []);
+        setSubmitting(true);
+        try {
+            const result = await submitAttempt(request, detail.attempt.id, 'Manual', new Date().toISOString());
+            setSubmitted(result);
+            syncSummary(result);
+            toast({ type: 'success', title: 'Da nop bai thanh cong' });
+        } catch (submitError) {
+            toast({ type: 'error', title: 'Nop bai that bai', message: submitError instanceof Error ? submitError.message : undefined });
+        } finally {
+            setSubmitting(false);
+        }
+    }, [detail, request, syncSummary, toast]);
+
+    if (error && !detail && !submitted) {
+        return (
+            <InlineState
+                icon={<AlertCircle className="h-10 w-10" />}
+                title="Khong the mo phien thi"
+                description={error}
+                actions={<Link href="/student/exams"><Button variant="secondary">Quay lai</Button></Link>}
+            />
+        );
+    }
+
+    if (loading && !detail && !submitted) {
+        return <InlineState title="Dang khoi tao phien thi" description="ExamGuard dang tai session va snapshot de thi that." />;
+    }
 
     if (submitted) {
         return (
-            <div className="fixed inset-0 flex items-center justify-center bg-bg-primary z-50">
-                <div className="absolute inset-0 pointer-events-none overflow-hidden">
-                    <div className="ambient-orb ambient-orb-purple w-[600px] h-[600px] top-1/4 left-1/4 opacity-20" />
-                    <div className="ambient-orb ambient-orb-cyan w-[400px] h-[400px] bottom-1/4 right-1/4 opacity-15" style={{ animationDelay: '2s' }} />
-                </div>
-                <motion.div
-                    initial={{ opacity: 0, scale: 0.9, y: 20, filter: 'blur(8px)' }}
-                    animate={{ opacity: 1, scale: 1, y: 0, filter: 'blur(0px)' }}
-                    transition={{ type: 'spring', stiffness: 150, damping: 18 }}
-                    className="relative glassmorphism glass-heavy rounded-[var(--radius-2xl)] p-10 max-w-md w-full mx-4 text-center border border-border-glass-strong shadow-xl"
-                >
-                    <div className="absolute -inset-[1px] rounded-[var(--radius-2xl)] bg-gradient-to-br from-accent/20 via-transparent to-accent-cyan/15 opacity-50 pointer-events-none" />
-                    <div className="relative z-10">
-                        <motion.div
-                            initial={{ scale: 0 }}
-                            animate={{ scale: 1 }}
-                            transition={{ delay: 0.2, type: 'spring', stiffness: 200, damping: 12 }}
-                            className="w-20 h-20 mx-auto rounded-full bg-gradient-to-br from-success/20 to-accent-emerald-glow flex items-center justify-center mb-6 glow-success"
-                        >
-                            <CheckCircle2 className="h-10 w-10 text-success" />
-                        </motion.div>
-                        <h2 className="text-2xl font-bold tracking-tight text-text-primary">Đã nộp bài!</h2>
-                        <p className="text-sm text-text-muted mt-2">Kết quả sẽ được công bố sau khi kỳ thi kết thúc.</p>
-                        <div className="grid grid-cols-3 gap-3 mt-8">
-                            <div className="glass-card rounded-[var(--radius-lg)] p-3">
-                                <p className="text-2xl font-bold text-accent-light">{answeredCount}</p>
-                                <p className="text-[10px] text-text-muted uppercase tracking-wider mt-1">Đã trả lời</p>
-                            </div>
-                            <div className="glass-card rounded-[var(--radius-lg)] p-3">
-                                <p className="text-2xl font-bold text-accent-cyan">{questions.length - answeredCount}</p>
-                                <p className="text-[10px] text-text-muted uppercase tracking-wider mt-1">Bỏ trống</p>
-                            </div>
-                            <div className="glass-card rounded-[var(--radius-lg)] p-3">
-                                <p className="text-2xl font-bold text-warning">{flagged.size}</p>
-                                <p className="text-[10px] text-text-muted uppercase tracking-wider mt-1">Đã đánh dấu</p>
-                            </div>
+            <div className="min-h-screen flex items-center justify-center bg-bg-primary p-6">
+                <Card className="w-full max-w-xl text-center">
+                    <div className="flex flex-col items-center gap-4">
+                        <CheckCircle2 className="h-12 w-12 text-success" />
+                        <h1 className="text-2xl font-bold text-text-primary">Da nop bai</h1>
+                        <p className="text-sm text-text-muted">
+                            {submitted.examTitle} · {submitted.submittedAt ? formatDateTime(submitted.submittedAt) : 'vua xong'}
+                        </p>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 w-full">
+                            <div className="glass-card rounded-[var(--radius-lg)] p-3"><p className="text-xl font-bold">{submitted.answeredQuestions}</p><p className="text-xs text-text-muted">Da tra loi</p></div>
+                            <div className="glass-card rounded-[var(--radius-lg)] p-3"><p className="text-xl font-bold">{submitted.totalQuestions - submitted.answeredQuestions}</p><p className="text-xs text-text-muted">Bo trong</p></div>
+                            <div className="glass-card rounded-[var(--radius-lg)] p-3"><p className="text-xl font-bold">{submitted.correctAnswers ?? '—'}</p><p className="text-xs text-text-muted">Dung</p></div>
+                            <div className="glass-card rounded-[var(--radius-lg)] p-3"><p className="text-xl font-bold">{submitted.score ?? '—'}</p><p className="text-xs text-text-muted">Diem</p></div>
                         </div>
-                        <Button className="w-full mt-8" onClick={() => window.location.href = '/student/dashboard'} glow>
-                            Về trang chính
-                        </Button>
+                        <div className="flex gap-3">
+                            <Link href="/student/history"><Button variant="secondary">Lich su</Button></Link>
+                            <Link href="/student/dashboard"><Button>Dashboard</Button></Link>
+                        </div>
                     </div>
-                </motion.div>
+                </Card>
             </div>
         );
     }
 
-    const question = questions[currentQ];
+    if (session?.requiresPassword && !detail) {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-bg-primary p-6">
+                <Card className="w-full max-w-md">
+                    <div className="space-y-4">
+                        <PageHeader title={session.examTitle} description={session.sessionName} />
+                        <Input
+                            label="Mat khau session"
+                            type="password"
+                            value={password}
+                            onChange={(event) => setPassword(event.target.value)}
+                            error={passwordError ?? undefined}
+                            placeholder="Nhap mat khau de vao thi"
+                        />
+                        <div className="flex justify-end gap-2">
+                            <Link href="/student/exams"><Button variant="ghost">Huy</Button></Link>
+                            <Button onClick={() => void boot(password)}><Lock className="h-4 w-4" />Bat dau</Button>
+                        </div>
+                    </div>
+                </Card>
+            </div>
+        );
+    }
+
+    if (session && toStatusKey(session.status) !== 'active' && !detail) {
+        return (
+            <InlineState
+                icon={<Clock className="h-10 w-10" />}
+                title="Session chua den gio"
+                description={`${session.sessionName} mo luc ${formatDateTime(session.startTime)}.`}
+                actions={<Link href="/student/exams"><Button variant="secondary">Quay lai</Button></Link>}
+            />
+        );
+    }
+
+    if (!detail || !currentQuestion) {
+        return <InlineState title="Khong co cau hoi" description="Backend khong tra ve snapshot cau hoi cho attempt nay." />;
+    }
+
+    const questionButtons = questions.map((question, index) => (
+        <button
+            key={question.id}
+            onClick={() => setQuestionIndex(index)}
+            className={cn(
+                'w-10 h-10 rounded-[var(--radius-sm)] text-xs font-semibold border cursor-pointer',
+                index === questionIndex
+                    ? 'bg-accent/20 text-accent-light border-accent/30'
+                    : question.selectedOptionSnapshotId
+                        ? 'bg-success/10 text-success border-success/20'
+                        : 'bg-surface-glass text-text-muted border-border-glass',
+            )}
+        >
+            {index + 1}
+        </button>
+    ));
 
     return (
-        <div className="fixed inset-0 flex bg-bg-primary overflow-hidden">
-            {/* Background */}
-            <div className="absolute inset-0 pointer-events-none overflow-hidden">
-                <div className="ambient-orb ambient-orb-purple w-[500px] h-[500px] -top-48 -left-48 opacity-15" />
-                <div className="ambient-orb ambient-orb-cyan w-[300px] h-[300px] bottom-0 right-0 opacity-10" style={{ animationDelay: '3s' }} />
-            </div>
-
-            {/* Tab Warning Overlay */}
-            <AnimatePresence>
-                {showTabWarning && (
-                    <motion.div
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-md"
-                    >
-                        <motion.div
-                            initial={{ scale: 0.9, y: 20, filter: 'blur(8px)' }}
-                            animate={{ scale: 1, y: 0, filter: 'blur(0px)' }}
-                            exit={{ scale: 0.95, y: 10, filter: 'blur(4px)' }}
-                            className="glass-heavy rounded-[var(--radius-2xl)] p-8 max-w-sm w-full mx-4 text-center border border-danger/30 glow-danger"
-                        >
-                            <AlertTriangle className="h-14 w-14 text-danger mx-auto mb-4" />
-                            <h3 className="text-lg font-bold text-text-primary">Cảnh báo rời trang!</h3>
-                            <p className="text-sm text-text-muted mt-2">
-                                Bạn đã rời khỏi trang thi <span className="text-danger font-bold">{tabSwitchCount}</span> lần.
-                                Hành vi này sẽ được ghi nhận.
-                            </p>
-                            {tabSwitchCount >= 3 && (
-                                <p className="text-xs text-danger mt-3 font-semibold">
-                                    Vượt quá 5 lần rời tab sẽ tự động nộp bài!
-                                </p>
-                            )}
-                            <Button className="w-full mt-6" onClick={() => setShowTabWarning(false)}>
-                                Tiếp tục làm bài
-                            </Button>
-                        </motion.div>
-                    </motion.div>
-                )}
-            </AnimatePresence>
-
-            {/* Submit Confirmation */}
-            <AnimatePresence>
-                {showConfirm && (
-                    <motion.div
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
-                    >
-                        <motion.div
-                            initial={{ scale: 0.9, y: 20, filter: 'blur(8px)' }}
-                            animate={{ scale: 1, y: 0, filter: 'blur(0px)' }}
-                            exit={{ scale: 0.95, y: 10, filter: 'blur(4px)' }}
-                            className="glass-heavy rounded-[var(--radius-2xl)] p-8 max-w-sm mx-4 border border-border-glass-strong"
-                        >
-                            <h3 className="text-lg font-bold text-text-primary">Xác nhận nộp bài?</h3>
-                            <div className="mt-4 space-y-2 text-sm text-text-secondary">
-                                <p>Đã trả lời: <span className="text-accent-light font-bold">{answeredCount}/{questions.length}</span></p>
-                                <p>Bỏ trống: <span className="text-warning font-bold">{questions.length - answeredCount}</span></p>
-                                <p>Đánh dấu: <span className="text-accent-cyan font-bold">{flagged.size}</span></p>
-                            </div>
-                            <div className="flex gap-3 mt-6">
-                                <Button variant="outline" className="flex-1" onClick={() => setShowConfirm(false)}>Quay lại</Button>
-                                <Button variant="primary" className="flex-1" onClick={() => { setSubmitted(true); setShowConfirm(false); }} glow>Nộp bài</Button>
-                            </div>
-                        </motion.div>
-                    </motion.div>
-                )}
-            </AnimatePresence>
-
-            {/* Question Navigator Sidebar */}
-            <AnimatePresence>
-                {showNav && (
-                    <motion.aside
-                        initial={{ x: -280, opacity: 0 }}
-                        animate={{ x: 0, opacity: 1 }}
-                        exit={{ x: -280, opacity: 0 }}
-                        transition={{ type: 'spring', stiffness: 260, damping: 28 }}
-                        className="w-[260px] shrink-0 glass-heavy border-r border-border-glass flex flex-col relative z-20"
-                    >
-                        <div className="p-4 border-b border-border-glass">
-                            <div className="flex items-center justify-between mb-3">
-                                <h3 className="text-xs font-bold text-text-muted uppercase tracking-widest">Câu hỏi</h3>
-                                <button onClick={() => setShowNav(false)} className="text-text-muted hover:text-text-primary cursor-pointer p-1"><X className="h-3.5 w-3.5" /></button>
-                            </div>
-                            {/* Progress bar */}
-                            <div className="h-2 rounded-full bg-bg-tertiary overflow-hidden">
-                                <motion.div
-                                    className="h-full rounded-full bg-gradient-to-r from-accent to-accent-cyan"
-                                    initial={{ width: 0 }}
-                                    animate={{ width: `${progressPercent}%` }}
-                                    transition={{ duration: 0.5, ease: 'easeOut' }}
-                                    style={{ boxShadow: '0 0 8px rgba(139, 92, 246, 0.3)' }}
-                                />
-                            </div>
-                            <p className="text-[10px] text-text-muted mt-1.5">{answeredCount}/{questions.length} đã trả lời</p>
-                        </div>
-
-                        <div className="p-3 flex-1 overflow-y-auto">
-                            <div className="grid grid-cols-5 gap-1.5">
-                                {questions.map((_, idx) => {
-                                    const isAnswered = answers[idx] !== undefined;
-                                    const isFlagged = flagged.has(idx);
-                                    const isCurrent = idx === currentQ;
-                                    return (
-                                        <motion.button
-                                            key={idx}
-                                            whileHover={{ scale: 1.1 }}
-                                            whileTap={{ scale: 0.95 }}
-                                            onClick={() => setCurrentQ(idx)}
-                                            className={cn(
-                                                'w-full aspect-square rounded-[var(--radius-sm)] text-xs font-bold transition-all duration-200 cursor-pointer border',
-                                                isCurrent
-                                                    ? 'bg-accent/20 text-accent-light border-accent/40 glow-accent'
-                                                    : isAnswered
-                                                        ? 'bg-success/12 text-success border-success/20'
-                                                        : 'bg-surface-glass text-text-muted border-border-glass hover:border-border-hover hover:bg-surface-hover',
-                                                isFlagged && 'ring-2 ring-warning/40 ring-offset-1 ring-offset-transparent'
-                                            )}
-                                        >
-                                            {idx + 1}
-                                        </motion.button>
-                                    );
-                                })}
-                            </div>
-                        </div>
-
-                        {/* Legend */}
-                        <div className="p-3 border-t border-border-glass space-y-1.5">
-                            <div className="flex items-center gap-2 text-[10px] text-text-muted">
-                                <div className="w-3 h-3 rounded-[3px] bg-accent/20 border border-accent/40" /> Đang xem
-                            </div>
-                            <div className="flex items-center gap-2 text-[10px] text-text-muted">
-                                <div className="w-3 h-3 rounded-[3px] bg-success/12 border border-success/20" /> Đã trả lời
-                            </div>
-                            <div className="flex items-center gap-2 text-[10px] text-text-muted">
-                                <div className="w-3 h-3 rounded-[3px] bg-surface-glass border border-border-glass ring-2 ring-warning/40" /> Đánh dấu
-                            </div>
-                        </div>
-                    </motion.aside>
-                )}
-            </AnimatePresence>
-
-            {/* Main Area */}
-            <div className="flex-1 flex flex-col min-w-0 relative z-10">
-                {/* Header */}
-                <header className="h-16 shrink-0 flex items-center justify-between px-5 border-b border-border-glass/50 glass-heavy">
-                    <div className="flex items-center gap-3">
-                        {!showNav && (
-                            <Button variant="ghost" size="icon" onClick={() => setShowNav(true)}>
-                                <LayoutGrid className="h-4 w-4" />
-                            </Button>
-                        )}
-                        <div>
-                            <h1 className="text-sm font-bold text-text-primary">Kiểm tra giữa kỳ — Cơ sở dữ liệu</h1>
-                            <p className="text-[10px] text-text-muted">Câu {currentQ + 1} / {questions.length}</p>
-                        </div>
+        <div className="min-h-screen bg-bg-primary p-4 md:p-6">
+            <div className="max-w-6xl mx-auto space-y-4">
+                <div className="glass-heavy rounded-[var(--radius-xl)] p-4 flex items-center justify-between gap-4">
+                    <div>
+                        <h1 className="text-lg font-bold text-text-primary">{session?.examTitle || detail.attempt.examTitle}</h1>
+                        <p className="text-xs text-text-muted">Bat dau {formatDateTime(detail.attempt.startedAt)} · Het han {formatDateTime(detail.attempt.expiresAt)}</p>
                     </div>
-
                     <div className="flex items-center gap-3">
-                        {/* Auto-save indicator */}
-                        <AnimatePresence>
-                            {autoSaved && (
-                                <motion.div
-                                    initial={{ opacity: 0, x: 10 }}
-                                    animate={{ opacity: 1, x: 0 }}
-                                    exit={{ opacity: 0, x: 10 }}
-                                    className="flex items-center gap-1.5 text-[10px] text-success font-medium"
-                                >
-                                    <CheckCircle2 className="h-3 w-3" /> Đã lưu
-                                </motion.div>
-                            )}
-                        </AnimatePresence>
-
-                        {/* Tab switch counter */}
-                        {tabSwitchCount > 0 && (
-                            <Badge variant="danger" size="sm">
-                                <AlertTriangle className="h-3 w-3 mr-1" />
-                                Rời tab: {tabSwitchCount}
-                            </Badge>
-                        )}
-
-                        {/* ★ TIMER — Visual Centerpiece ★ */}
-                        <motion.div
-                            className={cn(
-                                'flex items-center gap-2 px-4 py-2 rounded-[var(--radius-full)] glass-card border font-mono text-base font-bold tracking-wider',
-                                isCritical
-                                    ? 'timer-urgent border-danger/40'
-                                    : isWarning
-                                        ? 'timer-warning border-warning/30'
-                                        : 'border-accent/20 text-accent-light'
-                            )}
-                            animate={isCritical ? {
-                                boxShadow: [
-                                    '0 0 20px rgba(248, 113, 113, 0.2)',
-                                    '0 0 40px rgba(248, 113, 113, 0.5)',
-                                    '0 0 20px rgba(248, 113, 113, 0.2)',
-                                ],
-                            } : isWarning ? {
-                                boxShadow: [
-                                    '0 0 16px rgba(251, 191, 36, 0.15)',
-                                    '0 0 28px rgba(251, 191, 36, 0.3)',
-                                    '0 0 16px rgba(251, 191, 36, 0.15)',
-                                ],
-                            } : {}}
-                            transition={isCritical || isWarning ? { duration: isCritical ? 0.8 : 1.5, repeat: Infinity, ease: 'easeInOut' } : {}}
-                        >
-                            <Clock className={cn('h-4 w-4', isCritical ? 'text-danger' : isWarning ? 'text-warning' : 'text-accent-light')} />
-                            <span>{String(minutes).padStart(2, '0')}:{String(seconds).padStart(2, '0')}</span>
-                        </motion.div>
-
-                        <Button variant="primary" size="sm" onClick={() => setShowConfirm(true)} icon={<Send className="h-3.5 w-3.5" />} glow>
-                            Nộp bài
+                        {autoSaved && <span className="text-xs text-success">Da luu</span>}
+                        {saving && <Loader2 className="h-4 w-4 animate-spin text-text-muted" />}
+                        <StatusBadge status={toStatusKey(detail.attempt.status)} />
+                        <div className="flex items-center gap-2 px-4 py-2 rounded-full glass-card border border-accent/20 font-mono font-bold">
+                            <Clock className="h-4 w-4 text-accent-light" />
+                            {String(Math.floor(timeLeftSeconds / 60)).padStart(2, '0')}:{String(timeLeftSeconds % 60).padStart(2, '0')}
+                        </div>
+                        <Button onClick={() => {
+                            if (window.confirm(`Nop bai voi ${answeredCount}/${questions.length} cau da tra loi?`)) {
+                                void handleSubmit();
+                            }
+                        }} disabled={submitting}>
+                            <Send className="h-4 w-4" />Nop bai
                         </Button>
-                    </div>
-                </header>
-
-                {/* Question Content */}
-                <div className="flex-1 overflow-y-auto p-6">
-                    <div className="max-w-3xl mx-auto">
-                        <AnimatePresence mode="wait">
-                            <motion.div
-                                key={currentQ}
-                                initial={{ opacity: 0, x: 30, filter: 'blur(4px)' }}
-                                animate={{ opacity: 1, x: 0, filter: 'blur(0px)' }}
-                                exit={{ opacity: 0, x: -30, filter: 'blur(4px)' }}
-                                transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
-                                className="space-y-6"
-                            >
-                                {/* Question Header */}
-                                <div className="flex items-start justify-between gap-4">
-                                    <div className="flex-1">
-                                        <div className="flex items-center gap-2 mb-2">
-                                            <span className="text-[11px] font-bold text-accent-light uppercase tracking-widest">
-                                                Câu {currentQ + 1}
-                                            </span>
-                                            <Badge variant={
-                                                question.difficulty === 'hard' ? 'danger' :
-                                                    question.difficulty === 'medium' ? 'warning' : 'success'
-                                            } size="sm">{question.difficulty === 'hard' ? 'Khó' : question.difficulty === 'medium' ? 'TB' : 'Dễ'}</Badge>
-                                        </div>
-                                        <h2 className="text-lg font-bold text-text-primary leading-relaxed tracking-tight">
-                                            {question.content}
-                                        </h2>
-                                    </div>
-                                    <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        onClick={() => toggleFlag(currentQ)}
-                                        className={cn(flagged.has(currentQ) && 'text-warning bg-warning/10 border border-warning/20')}
-                                    >
-                                        <Flag className={cn('h-4 w-4', flagged.has(currentQ) && 'fill-warning')} />
-                                    </Button>
-                                </div>
-
-                                {/* Answer Options */}
-                                <div className="space-y-3">
-                                    {question.options.map((opt, i) => {
-                                        const isSelected = answers[currentQ] === opt.id;
-                                        const labels = ['A', 'B', 'C', 'D'];
-                                        return (
-                                            <motion.button
-                                                key={opt.id}
-                                                initial={{ opacity: 0, y: 12 }}
-                                                animate={{ opacity: 1, y: 0 }}
-                                                transition={{ delay: i * 0.06, duration: 0.3 }}
-                                                whileHover={{ scale: 1.01, transition: { duration: 0.15 } }}
-                                                whileTap={{ scale: 0.99 }}
-                                                onClick={() => selectAnswer(currentQ, opt.id)}
-                                                className={cn(
-                                                    'w-full flex items-start gap-4 p-4 rounded-[var(--radius-lg)] text-left transition-all duration-200 cursor-pointer',
-                                                    'border',
-                                                    isSelected
-                                                        ? 'glass-card border-accent/30 bg-accent/8 glow-accent'
-                                                        : 'bg-surface-glass border-border-glass hover:border-border-hover hover:bg-surface-hover'
-                                                )}
-                                            >
-                                                <div className={cn(
-                                                    'w-8 h-8 rounded-[var(--radius-sm)] flex items-center justify-center text-xs font-bold shrink-0 border transition-all',
-                                                    isSelected
-                                                        ? 'bg-accent/20 text-accent-light border-accent/30'
-                                                        : 'bg-bg-tertiary text-text-muted border-border-glass'
-                                                )}>
-                                                    {labels[i]}
-                                                </div>
-                                                <span className={cn(
-                                                    'text-sm leading-relaxed pt-1',
-                                                    isSelected ? 'text-text-primary font-medium' : 'text-text-secondary'
-                                                )}>
-                                                    {opt.content}
-                                                </span>
-                                                {isSelected && (
-                                                    <motion.div
-                                                        initial={{ scale: 0 }}
-                                                        animate={{ scale: 1 }}
-                                                        transition={{ type: 'spring', stiffness: 300, damping: 15 }}
-                                                        className="ml-auto shrink-0 mt-1"
-                                                    >
-                                                        <CheckCircle2 className="h-5 w-5 text-accent-light" />
-                                                    </motion.div>
-                                                )}
-                                            </motion.button>
-                                        );
-                                    })}
-                                </div>
-                            </motion.div>
-                        </AnimatePresence>
                     </div>
                 </div>
 
-                {/* Footer Nav */}
-                <footer className="h-16 shrink-0 flex items-center justify-between px-5 border-t border-border-glass/50 glass-heavy">
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={currentQ === 0}
-                        onClick={() => setCurrentQ(prev => prev - 1)}
-                        icon={<ChevronLeft className="h-4 w-4" />}
-                    >
-                        Câu trước
-                    </Button>
-                    <div className="text-xs text-text-muted">
-                        <Shield className="h-3 w-3 inline-block mr-1 text-accent-light" />
-                        ExamGuard đang bảo vệ phiên thi
+                <div className="grid grid-cols-1 lg:grid-cols-[260px_minmax(0,1fr)] gap-4">
+                    <Card>
+                        <div className="space-y-4">
+                            <div>
+                                <p className="text-xs font-semibold text-text-muted uppercase tracking-wider">Tien do</p>
+                                <p className="text-sm text-text-primary mt-1">{answeredCount}/{questions.length} cau da tra loi</p>
+                            </div>
+                            <div className="grid grid-cols-5 gap-2">{questionButtons}</div>
+                        </div>
+                    </Card>
+
+                    <Card>
+                        <div className="space-y-6">
+                            <div className="flex items-start justify-between gap-4">
+                                <div>
+                                    <p className="text-xs font-semibold text-accent-light uppercase tracking-wider">Cau {questionIndex + 1}</p>
+                                    <h2 className="text-lg font-bold text-text-primary mt-2">{currentQuestion.content}</h2>
+                                </div>
+                                <div className="text-xs text-text-muted text-right">
+                                    <div>{detail.attempt.answeredQuestions}/{detail.attempt.totalQuestions}</div>
+                                    <div>{progressPercent(detail.attempt.answeredQuestions, detail.attempt.totalQuestions)}%</div>
+                                </div>
+                            </div>
+
+                            <div className="space-y-3">
+                                {currentQuestion.options.map((option) => {
+                                    const selected = currentQuestion.selectedOptionSnapshotId === option.id;
+                                    return (
+                                        <button
+                                            key={option.id}
+                                            onClick={() => void selectAnswer(currentQuestion.id, option.id)}
+                                            className={cn(
+                                                'w-full flex items-start gap-4 p-4 rounded-[var(--radius-lg)] text-left transition-all border cursor-pointer',
+                                                selected ? 'glass-card border-accent/30 bg-accent/8' : 'bg-surface-glass border-border-glass hover:bg-surface-hover',
+                                            )}
+                                        >
+                                            <div className={cn('w-8 h-8 rounded-[var(--radius-sm)] flex items-center justify-center text-xs font-bold shrink-0 border', selected ? 'bg-accent/20 text-accent-light border-accent/30' : 'bg-bg-tertiary text-text-muted border-border-glass')}>
+                                                {option.label}
+                                            </div>
+                                            <span className={cn('text-sm leading-relaxed pt-1', selected ? 'text-text-primary font-medium' : 'text-text-secondary')}>
+                                                {option.content}
+                                            </span>
+                                            {selected && <CheckCircle2 className="h-5 w-5 text-accent-light ml-auto shrink-0 mt-1" />}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+
+                            <div className="flex items-center justify-between pt-2 border-t border-border-glass">
+                                <Button variant="outline" disabled={questionIndex === 0} onClick={() => setQuestionIndex((value) => value - 1)}>
+                                    <ChevronLeft className="h-4 w-4" />Cau truoc
+                                </Button>
+                                <div className="text-xs text-text-muted">
+                                    <Shield className="h-3 w-3 inline-block mr-1 text-accent-light" />
+                                    Tab switch: {detail.attempt.tabSwitchCount} · Reload: {detail.attempt.reloadCount}
+                                </div>
+                                <Button variant="outline" disabled={questionIndex === questions.length - 1} onClick={() => setQuestionIndex((value) => value + 1)}>
+                                    Cau sau<ChevronRight className="h-4 w-4" />
+                                </Button>
+                            </div>
+                        </div>
+                    </Card>
+                </div>
+
+                <Card>
+                    <div className="flex items-center justify-between gap-4">
+                        <div>
+                            <p className="text-sm font-medium text-text-primary">Anti-cheat policy</p>
+                            <p className="text-xs text-text-muted">
+                                Max tab switch: {detail.policy.maxTabSwitches} · Auto submit: {detail.policy.autoSubmitOnTabLimit ? 'Co' : 'Khong'} · Copy/paste: {detail.policy.allowCopyPaste ? 'Cho phep' : 'Chan'}
+                            </p>
+                        </div>
+                        <div className="text-xs text-text-muted flex items-center gap-2">
+                            <Copy className="h-3 w-3" />
+                            Recent event: {detail.recentEvents.at(-1)?.eventType || 'ExamStart'}
+                        </div>
                     </div>
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={currentQ === questions.length - 1}
-                        onClick={() => setCurrentQ(prev => prev + 1)}
-                        iconRight={<ChevronRight className="h-4 w-4" />}
-                    >
-                        Câu sau
-                    </Button>
-                </footer>
+                </Card>
             </div>
         </div>
     );
+}
+
+function progressPercent(answeredQuestions: number, totalQuestions: number) {
+    if (totalQuestions === 0) {
+        return 0;
+    }
+    return Math.round((answeredQuestions / totalQuestions) * 100);
 }

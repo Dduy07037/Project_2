@@ -11,14 +11,14 @@ interface AppShellProps {
     children: ReactNode;
     role: 'admin' | 'lecturer' | 'student';
     userName: string;
+    onLogout: () => Promise<void>;
 }
 
-export function AppShell({ children, role, userName }: AppShellProps) {
+export function AppShell({ children, role, userName, onLogout }: AppShellProps) {
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
     return (
         <div className="min-h-screen relative">
-            {/* Ambient background orbs */}
             <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
                 <div className="ambient-orb ambient-orb-purple w-[500px] h-[500px] -top-48 -left-32 opacity-25" />
                 <div className="ambient-orb ambient-orb-cyan w-[400px] h-[400px] top-1/2 -right-48 opacity-15" style={{ animationDelay: '3s' }} />
@@ -31,11 +31,14 @@ export function AppShell({ children, role, userName }: AppShellProps) {
                 collapsed={sidebarCollapsed}
                 onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
             />
+
             <Topbar
                 userName={userName}
                 userRole={role}
                 sidebarCollapsed={sidebarCollapsed}
+                onLogout={onLogout}
             />
+
             <main
                 className={cn(
                     'pt-[80px] min-h-screen relative z-10',

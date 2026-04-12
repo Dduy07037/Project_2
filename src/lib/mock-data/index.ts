@@ -1,4 +1,4 @@
-import type { User, Subject, Question, Topic, Exam, ExamSession, ExamAttempt, BehaviorLog, ActivityLog, Notification, SystemSettings, ExamQuestion } from '@/types';
+import type { User, Subject, Question, Topic, Exam, ExamAttempt, ActivityLog, Notification, SystemSettings, ExamQuestion } from '@/types';
 
 // ─── Users ───
 export const mockUsers: User[] = [

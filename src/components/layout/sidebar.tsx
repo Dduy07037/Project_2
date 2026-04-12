@@ -1,16 +1,24 @@
 'use client';
 
-import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/cn';
 import { Avatar } from '@/components/ui/badge';
 import {
-    LayoutDashboard, Users, BookOpen, FileText, Settings, Activity,
-    GraduationCap, ClipboardList, FolderOpen, Shield, ChevronLeft,
-    ChevronRight, Home, History, Eye, AlertTriangle, LogOut, User,
-    Menu, X, BookMarked
+    Activity,
+    BookOpen,
+    ChevronLeft,
+    ChevronRight,
+    ClipboardList,
+    Eye,
+    GraduationCap,
+    History,
+    Home,
+    LayoutDashboard,
+    Settings,
+    Shield,
+    Users,
 } from 'lucide-react';
 
 interface SidebarItem {
@@ -37,13 +45,12 @@ const adminNav: SidebarGroup[] = [
         items: [
             { id: 'users', label: 'Người dùng', href: '/admin/users', icon: <Users className="h-4 w-4" /> },
             { id: 'subjects', label: 'Môn học', href: '/admin/subjects', icon: <BookOpen className="h-4 w-4" /> },
-            { id: 'exams', label: 'Kỳ thi', href: '/admin/exams', icon: <FileText className="h-4 w-4" /> },
         ],
     },
     {
         title: 'Hệ thống',
         items: [
-            { id: 'activity', label: 'Hoạt động', href: '/admin/activity', icon: <Activity className="h-4 w-4" />, badge: 3 },
+            { id: 'activity', label: 'Hoạt động', href: '/admin/activity', icon: <Activity className="h-4 w-4" /> },
             { id: 'settings', label: 'Cấu hình', href: '/admin/settings', icon: <Settings className="h-4 w-4" /> },
         ],
     },
@@ -59,14 +66,13 @@ const lecturerNav: SidebarGroup[] = [
         title: 'Câu hỏi',
         items: [
             { id: 'questions', label: 'Ngân hàng câu hỏi', href: '/lecturer/questions', icon: <ClipboardList className="h-4 w-4" /> },
-            { id: 'topics', label: 'Chủ đề', href: '/lecturer/topics', icon: <FolderOpen className="h-4 w-4" /> },
         ],
     },
     {
         title: 'Kỳ thi',
         items: [
-            { id: 'exams', label: 'Quản lý kỳ thi', href: '/lecturer/exams', icon: <FileText className="h-4 w-4" /> },
-            { id: 'monitoring', label: 'Giám sát', href: '/lecturer/monitoring', icon: <Eye className="h-4 w-4" />, badge: 2 },
+            { id: 'exams', label: 'Quản lý kỳ thi', href: '/lecturer/exams', icon: <BookOpen className="h-4 w-4" /> },
+            { id: 'monitoring', label: 'Giám sát', href: '/lecturer/monitoring', icon: <Eye className="h-4 w-4" /> },
         ],
     },
 ];
@@ -88,10 +94,14 @@ const studentNav: SidebarGroup[] = [
 
 function getNavForRole(role: string): SidebarGroup[] {
     switch (role) {
-        case 'admin': return adminNav;
-        case 'lecturer': return lecturerNav;
-        case 'student': return studentNav;
-        default: return [];
+        case 'admin':
+            return adminNav;
+        case 'lecturer':
+            return lecturerNav;
+        case 'student':
+            return studentNav;
+        default:
+            return [];
     }
 }
 
@@ -121,10 +131,8 @@ export function Sidebar({ role, userName, collapsed, onToggle }: SidebarProps) {
             animate={{ width: collapsed ? 72 : 260 }}
             transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
         >
-            {/* Ambient glow */}
             <div className="absolute -top-20 -left-20 w-48 h-48 ambient-orb ambient-orb-purple opacity-20 pointer-events-none" />
 
-            {/* Logo */}
             <div className="flex items-center h-16 px-4 border-b border-border-glass gap-3 shrink-0 relative z-10">
                 <div className="w-9 h-9 rounded-[var(--radius-md)] bg-gradient-to-br from-accent to-accent-cyan flex items-center justify-center shrink-0 shadow-md glow-accent">
                     <Shield className="h-4 w-4 text-white" />
@@ -144,10 +152,9 @@ export function Sidebar({ role, userName, collapsed, onToggle }: SidebarProps) {
                 </AnimatePresence>
             </div>
 
-            {/* Navigation */}
             <nav className="flex-1 overflow-y-auto py-4 px-2.5 relative z-10">
-                {navGroups.map((group, gi) => (
-                    <div key={gi} className="mb-4">
+                {navGroups.map((group, groupIndex) => (
+                    <div key={groupIndex} className="mb-4">
                         <AnimatePresence>
                             {group.title && !collapsed && (
                                 <motion.div
@@ -160,8 +167,10 @@ export function Sidebar({ role, userName, collapsed, onToggle }: SidebarProps) {
                                 </motion.div>
                             )}
                         </AnimatePresence>
+
                         {group.items.map((item) => {
                             const isActive = pathname === item.href || pathname?.startsWith(item.href + '/');
+
                             return (
                                 <Link
                                     key={item.id}
@@ -201,7 +210,6 @@ export function Sidebar({ role, userName, collapsed, onToggle }: SidebarProps) {
                                             {item.badge}
                                         </span>
                                     )}
-                                    {/* Tooltip when collapsed */}
                                     {collapsed && (
                                         <div className="absolute left-full ml-3 px-3 py-1.5 glass-heavy text-text-primary text-xs font-medium rounded-[var(--radius-sm)] shadow-lg opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity whitespace-nowrap z-50 border border-border-glass">
                                             {item.label}
@@ -214,7 +222,6 @@ export function Sidebar({ role, userName, collapsed, onToggle }: SidebarProps) {
                 ))}
             </nav>
 
-            {/* Bottom */}
             <div className="border-t border-border-glass p-3 shrink-0 relative z-10">
                 <AnimatePresence>
                     {!collapsed && (

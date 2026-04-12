@@ -86,13 +86,21 @@ public class AvailableSessionDto
     public Guid SessionId { get; set; }
     public Guid ExamId { get; set; }
     public string ExamTitle { get; set; } = string.Empty;
+    public string? ExamDescription { get; set; }
     public string SubjectName { get; set; } = string.Empty;
+    public string SubjectCode { get; set; } = string.Empty;
     public string SessionName { get; set; } = string.Empty;
     public int QuestionCount { get; set; }
     public int DurationMinutes { get; set; }
+    public decimal TotalPoints { get; set; }
     public DateTime StartTime { get; set; }
     public DateTime EndTime { get; set; }
     public bool RequiresPassword { get; set; }
     public string Status { get; set; } = string.Empty;
     public bool HasExistingAttempt { get; set; }
+    public Guid? AttemptId { get; set; }
+    public string? AttemptStatus { get; set; }
+    public bool ShowResultToStudent { get; set; }
+    public bool ShuffleQuestions { get; set; }
+    public bool ShuffleOptions { get; set; }
 }

@@ -1,57 +1,126 @@
 'use client';
 
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
-import { PageHeader, Panel, StatusBadge, Avatar } from '@/components/ui';
+import {
+    Avatar,
+    Button,
+    InlineState,
+    PageHeader,
+    SearchInput,
+} from '@/components/ui';
 import { DataTable } from '@/components/ui/table';
-import { SearchInput } from '@/components/ui/input';
-import { staggerContainer, staggerItem } from '@/lib/motion';
-import { mockActivityLogs } from '@/lib/mock-data';
+import { useAuth } from '@/components/providers/auth-provider';
+import { getActivity, getRoleLabel, type ActivityItemDto } from '@/lib/api/exam-guard';
 import { formatDateTime } from '@/lib/utils';
-import { useState } from 'react';
-import { Activity } from 'lucide-react';
+import { staggerContainer, staggerItem } from '@/lib/motion';
+import { AlertCircle, RefreshCw } from 'lucide-react';
 
 export default function AdminActivityPage() {
+    const { request } = useAuth();
+
+    const [activity, setActivity] = useState<ActivityItemDto[]>([]);
     const [search, setSearch] = useState('');
-    const filtered = mockActivityLogs.filter(l =>
-        l.userName.toLowerCase().includes(search.toLowerCase()) ||
-        l.action.toLowerCase().includes(search.toLowerCase()) ||
-        l.target.toLowerCase().includes(search.toLowerCase())
-    );
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+
+    const loadActivity = useCallback(async () => {
+        setLoading(true);
+        setError(null);
+
+        try {
+            const response = await getActivity(request, 150);
+            setActivity(response);
+        } catch (loadError) {
+            setError(loadError instanceof Error ? loadError.message : 'Khong the tai activity log.');
+        } finally {
+            setLoading(false);
+        }
+    }, [request]);
+
+    useEffect(() => {
+        void loadActivity();
+    }, [loadActivity]);
+
+    const filteredActivity = useMemo(() => {
+        const query = search.trim().toLowerCase();
+        if (!query) {
+            return activity;
+        }
+
+        return activity.filter((item) =>
+            item.userName.toLowerCase().includes(query)
+            || item.userRole.toLowerCase().includes(query)
+            || item.action.toLowerCase().includes(query)
+            || item.target.toLowerCase().includes(query)
+            || (item.details ?? '').toLowerCase().includes(query),
+        );
+    }, [activity, search]);
 
     const columns = [
         {
-            key: 'user', title: 'Người dùng', render: (l: typeof mockActivityLogs[0]) => (
-                <div className="flex items-center gap-2">
-                    <Avatar name={l.userName} size="sm" />
+            key: 'user',
+            title: 'Nguoi thuc hien',
+            render: (item: ActivityItemDto) => (
+                <div className="flex items-center gap-3">
+                    <Avatar name={item.userName} size="sm" />
                     <div>
-                        <p className="text-sm font-medium text-text-primary">{l.userName}</p>
-                        <p className="text-xs text-text-muted">{l.userRole}</p>
+                        <p className="text-sm font-medium text-text-primary">{item.userName}</p>
+                        <p className="text-xs text-text-muted">{getRoleLabel(item.userRole)}</p>
                     </div>
                 </div>
-            )
+            ),
         },
-        { key: 'action', title: 'Hành động', render: (l: typeof mockActivityLogs[0]) => <span className="text-sm text-text-primary">{l.action}</span> },
         {
-            key: 'target', title: 'Đối tượng', render: (l: typeof mockActivityLogs[0]) => (
-                <div>
-                    <span className="text-sm text-text-secondary">{l.target}</span>
-                    {l.details && <p className="text-xs text-text-muted">{l.details}</p>}
-                </div>
-            )
+            key: 'action',
+            title: 'Hanh dong',
+            render: (item: ActivityItemDto) => <span className="text-sm text-text-primary">{item.action}</span>,
         },
-        { key: 'timestamp', title: 'Thời gian', render: (l: typeof mockActivityLogs[0]) => <span className="text-xs text-text-muted font-mono">{formatDateTime(l.timestamp)}</span> },
+        {
+            key: 'target',
+            title: 'Doi tuong',
+            render: (item: ActivityItemDto) => (
+                <div>
+                    <p className="text-sm text-text-secondary">{item.target}</p>
+                    {item.details && <p className="text-xs text-text-muted">{item.details}</p>}
+                </div>
+            ),
+        },
+        {
+            key: 'timestamp',
+            title: 'Thoi gian',
+            render: (item: ActivityItemDto) => <span className="text-xs text-text-muted">{formatDateTime(item.timestamp)}</span>,
+        },
     ];
 
     return (
         <motion.div variants={staggerContainer} initial="initial" animate="enter" className="space-y-6">
             <motion.div variants={staggerItem}>
-                <PageHeader title="Hoạt động hệ thống" description="Lịch sử các thao tác trên hệ thống" />
+                <PageHeader
+                    title="Hoat dong he thong"
+                    description={`${activity.length} su kien dang hien thi tu endpoint /api/activity`}
+                />
             </motion.div>
+
             <motion.div variants={staggerItem} className="max-w-sm">
-                <SearchInput value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Tìm hoạt động..." />
+                <SearchInput value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Tim user, action, target..." />
             </motion.div>
+
             <motion.div variants={staggerItem}>
-                <DataTable columns={columns} data={filtered} emptyMessage="Không có hoạt động" />
+                {error ? (
+                    <InlineState
+                        icon={<AlertCircle className="h-10 w-10" />}
+                        title="Khong the tai activity"
+                        description={error}
+                        actions={(
+                            <Button variant="secondary" icon={<RefreshCw className="h-4 w-4" />} onClick={() => void loadActivity()}>
+                                Thu lai
+                            </Button>
+                        )}
+                    />
+                ) : (
+                    <DataTable columns={columns} data={filteredActivity} loading={loading} emptyMessage="Chua co su kien nao phu hop." />
+                )}
             </motion.div>
         </motion.div>
     );

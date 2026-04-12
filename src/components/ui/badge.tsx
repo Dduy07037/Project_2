@@ -2,7 +2,6 @@
 
 import { cn } from '@/lib/cn';
 
-// ─── Badge (pill with glass effect) ───
 type BadgeVariant = 'primary' | 'secondary' | 'success' | 'danger' | 'warning' | 'info' | 'outline';
 
 interface BadgeProps {
@@ -44,27 +43,28 @@ export function Badge({ children, variant = 'secondary', size = 'md', dot, class
     );
 }
 
-// ─── Status Badge (semantic map) ───
 const statusMap: Record<string, { label: string; variant: BadgeVariant }> = {
-    active: { label: 'Đang hoạt động', variant: 'success' },
-    inactive: { label: 'Ngừng HĐ', variant: 'secondary' },
-    locked: { label: 'Đã khóa', variant: 'danger' },
-    scheduled: { label: 'Sắp diễn ra', variant: 'info' },
-    completed: { label: 'Đã kết thúc', variant: 'outline' },
-    draft: { label: 'Bản nháp', variant: 'secondary' },
-    submitted: { label: 'Đã nộp', variant: 'success' },
-    auto_submitted: { label: 'Tự động nộp', variant: 'warning' },
-    in_progress: { label: 'Đang làm', variant: 'info' },
-    flagged: { label: 'Cần xem xét', variant: 'danger' },
-    easy: { label: 'Dễ', variant: 'success' },
-    medium: { label: 'Trung bình', variant: 'warning' },
-    hard: { label: 'Khó', variant: 'danger' },
-    high: { label: 'Cao', variant: 'danger' },
-    low: { label: 'Thấp', variant: 'info' },
-    success: { label: 'Thành công', variant: 'success' },
-    warning: { label: 'Cảnh báo', variant: 'warning' },
-    danger: { label: 'Nguy hiểm', variant: 'danger' },
-    info: { label: 'Thông tin', variant: 'info' },
+    active: { label: 'Active', variant: 'success' },
+    disabled: { label: 'Disabled', variant: 'secondary' },
+    inactive: { label: 'Inactive', variant: 'secondary' },
+    locked: { label: 'Locked', variant: 'danger' },
+    scheduled: { label: 'Scheduled', variant: 'info' },
+    completed: { label: 'Completed', variant: 'outline' },
+    draft: { label: 'Draft', variant: 'secondary' },
+    published: { label: 'Published', variant: 'info' },
+    submitted: { label: 'Submitted', variant: 'success' },
+    auto_submitted: { label: 'Auto submitted', variant: 'warning' },
+    in_progress: { label: 'In progress', variant: 'info' },
+    flagged: { label: 'Needs review', variant: 'danger' },
+    easy: { label: 'Easy', variant: 'success' },
+    medium: { label: 'Medium', variant: 'warning' },
+    hard: { label: 'Hard', variant: 'danger' },
+    high: { label: 'High', variant: 'danger' },
+    low: { label: 'Low', variant: 'info' },
+    success: { label: 'Success', variant: 'success' },
+    warning: { label: 'Warning', variant: 'warning' },
+    danger: { label: 'Danger', variant: 'danger' },
+    info: { label: 'Info', variant: 'info' },
 };
 
 export function StatusBadge({ status, className }: { status: string; className?: string }) {
@@ -72,7 +72,6 @@ export function StatusBadge({ status, className }: { status: string; className?:
     return <Badge variant={config.variant} size="sm" dot className={className}>{config.label}</Badge>;
 }
 
-// ─── Avatar (glass ring) ───
 interface AvatarProps {
     name: string;
     src?: string;
@@ -102,12 +101,10 @@ export function Avatar({ name, src, size = 'md', className }: AvatarProps) {
     );
 }
 
-// ─── Separator ───
 export function Separator({ className }: { className?: string }) {
     return <div className={cn('h-px bg-gradient-to-r from-transparent via-border-glass-strong to-transparent', className)} />;
 }
 
-// ─── Skeleton (enhanced shimmer) ───
 export function Skeleton({ className }: { className?: string }) {
     return <div className={cn('skeleton', className)} />;
 }

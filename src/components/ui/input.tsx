@@ -51,7 +51,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
 Input.displayName = 'Input';
 
 // ─── Search Input ───
-interface SearchInputProps extends InputHTMLAttributes<HTMLInputElement> { }
+type SearchInputProps = InputHTMLAttributes<HTMLInputElement>;
 
 const SearchInput = forwardRef<HTMLInputElement, SearchInputProps>(
     ({ className, ...props }, ref) => {

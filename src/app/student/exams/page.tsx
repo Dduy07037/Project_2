@@ -1,74 +1,126 @@
 'use client';
 
-import { motion } from 'framer-motion';
-import { PageHeader, Button, StatusBadge, Card, Panel } from '@/components/ui';
-import { staggerContainer, staggerItem } from '@/lib/motion';
-import { mockExams } from '@/lib/mock-data';
-import { formatDateTime, formatDuration } from '@/lib/utils';
-import { ArrowRight, Clock, FileText, GraduationCap, Calendar, Shuffle, Eye, EyeOff } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { motion } from 'framer-motion';
+import {
+    Button,
+    Card,
+    InlineState,
+    PageHeader,
+    StatusBadge,
+} from '@/components/ui';
+import { useAuth } from '@/components/providers/auth-provider';
+import { getAvailableSessions, toStatusKey, type AvailableSessionDto } from '@/lib/api/exam-guard';
+import { formatDateTime, formatDuration } from '@/lib/utils';
+import { staggerContainer, staggerItem } from '@/lib/motion';
+import { AlertCircle, ArrowRight, Calendar, Clock, Eye, EyeOff, GraduationCap, Lock, RefreshCw, Shuffle } from 'lucide-react';
 
 export default function StudentExamsPage() {
-    const availableExams = mockExams.filter(e => e.status === 'active' || e.status === 'scheduled');
+    const { request } = useAuth();
+
+    const [sessions, setSessions] = useState<AvailableSessionDto[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+
+    const loadSessions = useCallback(async () => {
+        setLoading(true);
+        setError(null);
+
+        try {
+            const response = await getAvailableSessions(request);
+            setSessions(response);
+        } catch (loadError) {
+            setError(loadError instanceof Error ? loadError.message : 'Khong the tai ca thi kha dung.');
+        } finally {
+            setLoading(false);
+        }
+    }, [request]);
+
+    useEffect(() => {
+        void loadSessions();
+    }, [loadSessions]);
+
+    const groupedSessions = useMemo(() => sessions.sort((left, right) => new Date(left.startTime).getTime() - new Date(right.startTime).getTime()), [sessions]);
 
     return (
         <motion.div variants={staggerContainer} initial="initial" animate="enter" className="space-y-6">
             <motion.div variants={staggerItem}>
-                <PageHeader title="Ca thi khả dụng" description="Danh sách các kỳ thi bạn có thể tham gia" />
+                <PageHeader title="Ca thi kha dung" description="Danh sach du lieu thuc tu GET /api/exams/available." />
             </motion.div>
 
             <motion.div variants={staggerItem} className="grid gap-4">
-                {availableExams.map((exam) => {
-                    const activeSession = exam.sessions.find(s => s.status === 'active' || s.status === 'scheduled');
+                {error ? (
+                    <InlineState
+                        icon={<AlertCircle className="h-10 w-10" />}
+                        title="Khong the tai ca thi"
+                        description={error}
+                        actions={(
+                            <Button variant="secondary" icon={<RefreshCw className="h-4 w-4" />} onClick={() => void loadSessions()}>
+                                Thu lai
+                            </Button>
+                        )}
+                    />
+                ) : loading && sessions.length === 0 ? (
+                    <InlineState title="Dang tai ca thi" description="ExamGuard dang doc sessions duoc mo cho sinh vien." />
+                ) : groupedSessions.length === 0 ? (
+                    <InlineState title="Khong co ca thi kha dung" description="Hien tai khong co session nao dang mo hoac sap dien ra." />
+                ) : groupedSessions.map((session) => {
+                    const statusKey = toStatusKey(session.status);
+                    const canStart = statusKey === 'active' && (!session.attemptStatus || toStatusKey(session.attemptStatus) === 'in_progress');
+                    const hasCompletedAttempt = session.attemptStatus ? toStatusKey(session.attemptStatus) !== 'in_progress' : false;
+
                     return (
-                        <Card key={exam.id} hover>
+                        <Card key={session.sessionId} hover>
                             <div className="flex items-start gap-5">
                                 <div className="w-14 h-14 rounded-[var(--radius-lg)] bg-accent/10 flex items-center justify-center shrink-0">
                                     <GraduationCap className="h-6 w-6 text-accent" />
                                 </div>
                                 <div className="flex-1 min-w-0">
-                                    <div className="flex items-center gap-2 mb-1">
-                                        <h3 className="text-base font-semibold text-text-primary">{exam.title}</h3>
-                                        <StatusBadge status={exam.status} />
+                                    <div className="flex items-center gap-2 mb-1 flex-wrap">
+                                        <h3 className="text-base font-semibold text-text-primary">{session.examTitle}</h3>
+                                        <StatusBadge status={statusKey} />
+                                        {session.hasExistingAttempt && session.attemptStatus && (
+                                            <StatusBadge status={toStatusKey(session.attemptStatus)} />
+                                        )}
                                     </div>
-                                    <p className="text-sm text-text-muted mb-3">{exam.description}</p>
+                                    <p className="text-sm text-text-muted mb-3">{session.examDescription || session.subjectName}</p>
                                     <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-text-secondary">
-                                        <span className="flex items-center gap-1"><FileText className="h-3.5 w-3.5" /> {exam.questionCount} câu hỏi</span>
-                                        <span className="flex items-center gap-1"><Clock className="h-3.5 w-3.5" /> {formatDuration(exam.duration)}</span>
-                                        <span className="flex items-center gap-1"><Shuffle className="h-3.5 w-3.5" /> {exam.shuffleQuestions ? 'Trộn câu hỏi' : 'Thứ tự cố định'}</span>
+                                        <span className="flex items-center gap-1"><Clock className="h-3.5 w-3.5" /> {formatDuration(session.durationMinutes)}</span>
+                                        <span className="flex items-center gap-1"><Shuffle className="h-3.5 w-3.5" /> {session.shuffleQuestions ? 'Tron cau hoi' : 'Thu tu co dinh'}</span>
                                         <span className="flex items-center gap-1">
-                                            {exam.showResult ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
-                                            {exam.showResult ? 'Xem kết quả sau thi' : 'Không xem kết quả'}
+                                            {session.showResultToStudent ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
+                                            {session.showResultToStudent ? 'Co xem ket qua' : 'An ket qua'}
                                         </span>
+                                        {session.requiresPassword && (
+                                            <span className="flex items-center gap-1"><Lock className="h-3.5 w-3.5" /> Co mat khau</span>
+                                        )}
                                     </div>
-                                    {activeSession && (
-                                        <div className="mt-3 p-3 bg-bg-tertiary rounded-[var(--radius-md)] flex items-center justify-between">
-                                            <div>
-                                                <p className="text-xs font-medium text-text-secondary">{activeSession.name}</p>
-                                                <p className="text-xs text-text-muted flex items-center gap-1 mt-0.5">
-                                                    <Calendar className="h-3 w-3" />
-                                                    {formatDateTime(activeSession.startTime)} — {formatDateTime(activeSession.endTime)}
-                                                </p>
-                                            </div>
-                                            <Link href={`/student/exams/${exam.id}`}>
+                                    <div className="mt-3 p-3 bg-bg-tertiary rounded-[var(--radius-md)] flex items-center justify-between gap-4">
+                                        <div>
+                                            <p className="text-xs font-medium text-text-secondary">{session.sessionName}</p>
+                                            <p className="text-xs text-text-muted flex items-center gap-1 mt-0.5">
+                                                <Calendar className="h-3 w-3" />
+                                                {formatDateTime(session.startTime)} — {formatDateTime(session.endTime)}
+                                            </p>
+                                        </div>
+                                        {canStart ? (
+                                            <Link href={`/student/exams/${session.sessionId}/take`}>
                                                 <Button size="sm" iconRight={<ArrowRight className="h-3 w-3" />}>
-                                                    {exam.status === 'active' ? 'Vào thi' : 'Xem chi tiết'}
+                                                    {session.hasExistingAttempt ? 'Tiep tuc lam bai' : 'Vao thi'}
                                                 </Button>
                                             </Link>
-                                        </div>
-                                    )}
+                                        ) : (
+                                            <Button size="sm" variant="secondary" disabled>
+                                                {hasCompletedAttempt ? 'Da hoan thanh' : 'Chua den gio'}
+                                            </Button>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
                         </Card>
                     );
                 })}
-                {availableExams.length === 0 && (
-                    <div className="text-center py-16 text-text-muted text-sm">
-                        <GraduationCap className="h-12 w-12 mx-auto mb-3 opacity-30" />
-                        <p className="text-base font-medium text-text-secondary mb-1">Không có ca thi khả dụng</p>
-                        <p>Hiện tại không có kỳ thi nào đang mở hoặc sắp diễn ra</p>
-                    </div>
-                )}
             </motion.div>
         </motion.div>
     );

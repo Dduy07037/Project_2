@@ -1,35 +1,172 @@
 'use client';
 
-import { useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
-import { PageHeader, Badge, StatusBadge, Avatar, Button, SearchInput, Select, Modal, Input } from '@/components/ui';
+import {
+    Avatar,
+    Badge,
+    Button,
+    InlineState,
+    Input,
+    Modal,
+    PageHeader,
+    SearchInput,
+    Select,
+    StatusBadge,
+    Tabs,
+} from '@/components/ui';
 import { DataTable } from '@/components/ui/table';
-import { Tabs } from '@/components/ui/tabs';
-import { staggerContainer, staggerItem } from '@/lib/motion';
-import { mockUsers } from '@/lib/mock-data';
+import { useToast } from '@/components/ui/toast';
+import { useAuth } from '@/components/providers/auth-provider';
+import {
+    createUser,
+    getRoleLabel,
+    getUsers,
+    resetUserPassword,
+    toStatusKey,
+    updateUserStatus,
+    type CreateUserRequest,
+    type UserDto,
+} from '@/lib/api/exam-guard';
 import { formatDateTime } from '@/lib/utils';
-import { Plus, MoreHorizontal, Edit, Lock, Unlock, Trash2, Filter } from 'lucide-react';
+import { staggerContainer, staggerItem } from '@/lib/motion';
+import { AlertCircle, KeyRound, Lock, Plus, RefreshCw, Unlock } from 'lucide-react';
+
+const emptyCreateForm: CreateUserRequest = {
+    email: '',
+    password: '',
+    fullName: '',
+    role: 'Student',
+    studentCode: '',
+    department: '',
+};
 
 export default function UsersPage() {
+    const { request } = useAuth();
+    const { toast } = useToast();
+
     const [search, setSearch] = useState('');
     const [roleFilter, setRoleFilter] = useState('all');
+    const [users, setUsers] = useState<UserDto[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
     const [showCreateModal, setShowCreateModal] = useState(false);
+    const [submitting, setSubmitting] = useState(false);
+    const [createForm, setCreateForm] = useState<CreateUserRequest>(emptyCreateForm);
 
-    const filteredUsers = mockUsers.filter((u) => {
-        const matchSearch = u.name.toLowerCase().includes(search.toLowerCase()) || u.email.toLowerCase().includes(search.toLowerCase());
-        const matchRole = roleFilter === 'all' || u.role === roleFilter;
-        return matchSearch && matchRole;
-    });
+    const loadUsers = useCallback(async () => {
+        setLoading(true);
+        setError(null);
+
+        try {
+            const response = await getUsers(request, {
+                search: search || undefined,
+                role: roleFilter !== 'all' ? roleFilter : undefined,
+                page: 1,
+                pageSize: 100,
+            });
+
+            setUsers(response.items);
+        } catch (loadError) {
+            setError(loadError instanceof Error ? loadError.message : 'Khong the tai danh sach nguoi dung.');
+        } finally {
+            setLoading(false);
+        }
+    }, [request, roleFilter, search]);
+
+    useEffect(() => {
+        void loadUsers();
+    }, [loadUsers]);
+
+    const roleTabs = useMemo(() => {
+        const counts = users.reduce<Record<string, number>>((accumulator, user) => {
+            const roleKey = user.role.toLowerCase();
+            accumulator[roleKey] = (accumulator[roleKey] ?? 0) + 1;
+            return accumulator;
+        }, {});
+
+        return [
+            { id: 'all', label: 'Tat ca', count: users.length },
+            { id: 'admin', label: 'Admin', count: counts.admin ?? 0 },
+            { id: 'lecturer', label: 'Giang vien', count: counts.lecturer ?? 0 },
+            { id: 'student', label: 'Sinh vien', count: counts.student ?? 0 },
+        ];
+    }, [users]);
+
+    const handleCreateUser = useCallback(async () => {
+        if (!createForm.fullName.trim() || !createForm.email.trim() || !createForm.password.trim()) {
+            toast({ type: 'warning', title: 'Thieu thong tin', message: 'Vui long nhap du ho ten, email va mat khau.' });
+            return;
+        }
+
+        setSubmitting(true);
+
+        try {
+            await createUser(request, {
+                ...createForm,
+                email: createForm.email.trim(),
+                fullName: createForm.fullName.trim(),
+                studentCode: createForm.studentCode?.trim() || undefined,
+                department: createForm.department?.trim() || undefined,
+            });
+
+            toast({ type: 'success', title: 'Da tao tai khoan moi' });
+            setShowCreateModal(false);
+            setCreateForm(emptyCreateForm);
+            await loadUsers();
+        } catch (createError) {
+            toast({
+                type: 'error',
+                title: 'Tao tai khoan that bai',
+                message: createError instanceof Error ? createError.message : 'Da xay ra loi khong xac dinh.',
+            });
+        } finally {
+            setSubmitting(false);
+        }
+    }, [createForm, loadUsers, request, toast]);
+
+    const handleToggleStatus = useCallback(async (user: UserDto) => {
+        const nextStatus = user.status.toLowerCase() === 'active' ? 'Disabled' : 'Active';
+
+        try {
+            await updateUserStatus(request, user.id, nextStatus);
+            toast({ type: 'success', title: `Da cap nhat trang thai ${user.fullName}` });
+            await loadUsers();
+        } catch (statusError) {
+            toast({
+                type: 'error',
+                title: 'Cap nhat trang thai that bai',
+                message: statusError instanceof Error ? statusError.message : 'Da xay ra loi khong xac dinh.',
+            });
+        }
+    }, [loadUsers, request, toast]);
+
+    const handleResetPassword = useCallback(async (user: UserDto) => {
+        try {
+            await resetUserPassword(request, user.id, 'Password123!');
+            toast({
+                type: 'success',
+                title: `Da reset mat khau cho ${user.fullName}`,
+                message: 'Mat khau tam thoi da duoc dat ve Password123!.',
+            });
+        } catch (resetError) {
+            toast({
+                type: 'error',
+                title: 'Reset mat khau that bai',
+                message: resetError instanceof Error ? resetError.message : 'Da xay ra loi khong xac dinh.',
+            });
+        }
+    }, [request, toast]);
 
     const columns = [
         {
             key: 'name',
-            title: 'Người dùng',
-            render: (user: typeof mockUsers[0]) => (
+            title: 'Nguoi dung',
+            render: (user: UserDto) => (
                 <div className="flex items-center gap-3">
-                    <Avatar name={user.name} size="sm" />
+                    <Avatar name={user.fullName} size="sm" />
                     <div>
-                        <p className="text-sm font-medium text-text-primary">{user.name}</p>
+                        <p className="text-sm font-medium text-text-primary">{user.fullName}</p>
                         <p className="text-xs text-text-muted">{user.email}</p>
                     </div>
                 </div>
@@ -37,99 +174,158 @@ export default function UsersPage() {
         },
         {
             key: 'role',
-            title: 'Vai trò',
-            render: (user: typeof mockUsers[0]) => {
-                const roleMap: Record<string, string> = { admin: 'Admin', lecturer: 'Giảng viên', student: 'Sinh viên' };
-                const colorMap: Record<string, 'danger' | 'info' | 'primary'> = { admin: 'danger', lecturer: 'info', student: 'primary' };
-                return <Badge variant={colorMap[user.role]}>{roleMap[user.role]}</Badge>;
-            },
-        },
-        {
-            key: 'department',
-            title: 'Khoa/Bộ môn',
-            render: (user: typeof mockUsers[0]) => (
-                <span className="text-sm text-text-secondary">{user.department || '—'}</span>
+            title: 'Vai tro',
+            render: (user: UserDto) => (
+                <Badge
+                    variant={user.role.toLowerCase() === 'admin' ? 'danger' : user.role.toLowerCase() === 'lecturer' ? 'info' : 'primary'}
+                >
+                    {getRoleLabel(user.role)}
+                </Badge>
             ),
         },
         {
-            key: 'status',
-            title: 'Trạng thái',
-            render: (user: typeof mockUsers[0]) => <StatusBadge status={user.status} />,
+            key: 'department',
+            title: 'Don vi',
+            render: (user: UserDto) => <span className="text-sm text-text-secondary">{user.department || user.studentCode || '—'}</span>,
         },
         {
-            key: 'lastLogin',
-            title: 'Đăng nhập cuối',
-            render: (user: typeof mockUsers[0]) => (
-                <span className="text-xs text-text-muted">{user.lastLogin ? formatDateTime(user.lastLogin) : '—'}</span>
+            key: 'status',
+            title: 'Trang thai',
+            render: (user: UserDto) => <StatusBadge status={toStatusKey(user.status)} />,
+        },
+        {
+            key: 'lastLoginAt',
+            title: 'Dang nhap cuoi',
+            render: (user: UserDto) => (
+                <span className="text-xs text-text-muted">{user.lastLoginAt ? formatDateTime(user.lastLoginAt) : 'Chua dang nhap'}</span>
             ),
         },
         {
             key: 'actions',
-            title: '',
-            className: 'w-10',
-            render: () => (
-                <Button variant="ghost" size="icon">
-                    <MoreHorizontal className="h-4 w-4" />
-                </Button>
+            title: 'Tac vu',
+            render: (user: UserDto) => (
+                <div className="flex items-center gap-2">
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => void handleResetPassword(user)}
+                        title="Reset password"
+                    >
+                        <KeyRound className="h-4 w-4" />
+                    </Button>
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => void handleToggleStatus(user)}
+                        title={user.status.toLowerCase() === 'active' ? 'Disable account' : 'Enable account'}
+                    >
+                        {user.status.toLowerCase() === 'active' ? <Lock className="h-4 w-4" /> : <Unlock className="h-4 w-4" />}
+                    </Button>
+                </div>
             ),
         },
-    ];
-
-    const tabs = [
-        { id: 'all', label: 'Tất cả', count: mockUsers.length },
-        { id: 'admin', label: 'Admin', count: mockUsers.filter(u => u.role === 'admin').length },
-        { id: 'lecturer', label: 'Giảng viên', count: mockUsers.filter(u => u.role === 'lecturer').length },
-        { id: 'student', label: 'Sinh viên', count: mockUsers.filter(u => u.role === 'student').length },
     ];
 
     return (
         <motion.div variants={staggerContainer} initial="initial" animate="enter" className="space-y-6">
             <motion.div variants={staggerItem}>
                 <PageHeader
-                    title="Quản lý người dùng"
-                    description={`${mockUsers.length} tài khoản trong hệ thống`}
-                    actions={
+                    title="Quan ly nguoi dung"
+                    description={`${users.length} tai khoan dang hien thi tu backend`}
+                    actions={(
                         <Button icon={<Plus className="h-4 w-4" />} onClick={() => setShowCreateModal(true)}>
-                            Tạo tài khoản
+                            Tao tai khoan
                         </Button>
-                    }
+                    )}
                 />
             </motion.div>
 
             <motion.div variants={staggerItem}>
-                <Tabs tabs={tabs} activeTab={roleFilter} onChange={setRoleFilter} />
+                <Tabs tabs={roleTabs} activeTab={roleFilter} onChange={setRoleFilter} />
             </motion.div>
 
-            <motion.div variants={staggerItem} className="flex items-center gap-3">
-                <div className="flex-1 max-w-sm">
-                    <SearchInput value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Tìm theo tên hoặc email..." />
-                </div>
+            <motion.div variants={staggerItem} className="max-w-sm">
+                <SearchInput value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Tim theo ten, email, MSSV..." />
             </motion.div>
 
             <motion.div variants={staggerItem}>
-                <DataTable columns={columns} data={filteredUsers} emptyMessage="Không tìm thấy người dùng" />
+                {error ? (
+                    <InlineState
+                        icon={<AlertCircle className="h-10 w-10" />}
+                        title="Khong the tai nguoi dung"
+                        description={error}
+                        actions={(
+                            <Button variant="secondary" icon={<RefreshCw className="h-4 w-4" />} onClick={() => void loadUsers()}>
+                                Thu lai
+                            </Button>
+                        )}
+                    />
+                ) : (
+                    <DataTable columns={columns} data={users} loading={loading} emptyMessage="Khong co tai khoan nao phu hop bo loc hien tai." />
+                )}
             </motion.div>
 
-            {/* Create Modal */}
-            <Modal open={showCreateModal} onClose={() => setShowCreateModal(false)} title="Tạo tài khoản mới" size="md">
+            <Modal
+                open={showCreateModal}
+                onClose={() => {
+                    if (!submitting) {
+                        setShowCreateModal(false);
+                    }
+                }}
+                title="Tao tai khoan moi"
+                description="Thong tin nay se duoc gui truc tiep den UsersController that."
+                size="md"
+            >
                 <div className="space-y-4">
-                    <Input label="Họ và tên" placeholder="Nguyễn Văn A" />
-                    <Input label="Email" type="email" placeholder="email@hcmut.edu.vn" />
-                    <Input label="Mật khẩu" type="password" placeholder="••••••••" />
-                    <Select
-                        label="Vai trò"
-                        options={[
-                            { value: 'student', label: 'Sinh viên' },
-                            { value: 'lecturer', label: 'Giảng viên' },
-                            { value: 'admin', label: 'Admin' },
-                        ]}
-                        value="student"
-                        onChange={() => { }}
+                    <Input
+                        label="Ho va ten"
+                        value={createForm.fullName}
+                        onChange={(event) => setCreateForm((current) => ({ ...current, fullName: event.target.value }))}
+                        placeholder="Nguyen Van A"
                     />
-                    <Input label="Khoa / Bộ môn" placeholder="Khoa CNTT" />
+                    <Input
+                        label="Email"
+                        type="email"
+                        value={createForm.email}
+                        onChange={(event) => setCreateForm((current) => ({ ...current, email: event.target.value }))}
+                        placeholder="email@example.com"
+                    />
+                    <Input
+                        label="Mat khau"
+                        type="password"
+                        value={createForm.password}
+                        onChange={(event) => setCreateForm((current) => ({ ...current, password: event.target.value }))}
+                        placeholder="Toi thieu 6 ky tu"
+                    />
+                    <Select
+                        label="Vai tro"
+                        value={createForm.role}
+                        onChange={(value) => setCreateForm((current) => ({ ...current, role: value }))}
+                        options={[
+                            { value: 'Student', label: 'Sinh vien' },
+                            { value: 'Lecturer', label: 'Giang vien' },
+                            { value: 'Admin', label: 'Admin' },
+                        ]}
+                    />
+                    <Input
+                        label="MSSV"
+                        value={createForm.studentCode ?? ''}
+                        onChange={(event) => setCreateForm((current) => ({ ...current, studentCode: event.target.value }))}
+                        placeholder="Bo trong neu khong phai sinh vien"
+                    />
+                    <Input
+                        label="Don vi"
+                        value={createForm.department ?? ''}
+                        onChange={(event) => setCreateForm((current) => ({ ...current, department: event.target.value }))}
+                        placeholder="Khoa CNTT"
+                    />
                     <div className="flex justify-end gap-2 pt-2">
-                        <Button variant="ghost" onClick={() => setShowCreateModal(false)}>Hủy</Button>
-                        <Button>Tạo tài khoản</Button>
+                        <Button variant="ghost" onClick={() => setShowCreateModal(false)} disabled={submitting}>
+                            Huy
+                        </Button>
+                        <Button onClick={() => void handleCreateUser()} loading={submitting}>
+                            Luu tai khoan
+                        </Button>
                     </div>
                 </div>
             </Modal>

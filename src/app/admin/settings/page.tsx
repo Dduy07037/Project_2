@@ -1,76 +1,215 @@
 'use client';
 
+import { useCallback, useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { PageHeader, Panel, Card, Button, StatusBadge, Badge, Avatar } from '@/components/ui';
-import { Input, Textarea } from '@/components/ui/input';
-import { Switch } from '@/components/ui/tabs';
-import { staggerContainer, staggerItem } from '@/lib/motion';
-import { mockSettings } from '@/lib/mock-data';
+import {
+    Button,
+    InlineState,
+    Input,
+    PageHeader,
+    Panel,
+    Switch,
+} from '@/components/ui';
 import { useToast } from '@/components/ui/toast';
-import { useState } from 'react';
-import { Save, Shield, Bell, Clock, Monitor, Eye } from 'lucide-react';
+import { useAuth } from '@/components/providers/auth-provider';
+import {
+    getSettings,
+    updateSettings,
+    type SystemSettingsDto,
+    type UpdateSystemSettingsRequest,
+} from '@/lib/api/exam-guard';
+import { staggerContainer, staggerItem } from '@/lib/motion';
+import { AlertCircle, RefreshCw, Save } from 'lucide-react';
+
+function mapSettingsToForm(settings: SystemSettingsDto): UpdateSystemSettingsRequest {
+    return {
+        siteName: settings.siteName,
+        maintenanceMode: settings.maintenanceMode,
+        maxLoginAttempts: settings.maxLoginAttempts,
+        sessionTimeoutMinutes: settings.sessionTimeoutMinutes,
+        tabSwitchWarning: settings.tabSwitchWarning,
+        maxTabSwitches: settings.maxTabSwitches,
+        autoSubmitOnTabLimit: settings.autoSubmitOnTabLimit,
+        allowCopyPaste: settings.allowCopyPaste,
+        showResultToStudent: settings.showResultToStudent,
+        rapidAnswerThresholdSeconds: settings.rapidAnswerThresholdSeconds,
+    };
+}
 
 export default function AdminSettingsPage() {
+    const { request } = useAuth();
     const { toast } = useToast();
-    const [settings, setSettings] = useState(mockSettings);
 
-    const handleSave = () => {
-        toast({ type: 'success', title: 'Đã lưu', message: 'Cấu hình hệ thống đã được cập nhật' });
-    };
+    const [settings, setSettings] = useState<UpdateSystemSettingsRequest | null>(null);
+    const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+
+    const loadSettings = useCallback(async () => {
+        setLoading(true);
+        setError(null);
+
+        try {
+            const response = await getSettings(request);
+            setSettings(mapSettingsToForm(response));
+        } catch (loadError) {
+            setError(loadError instanceof Error ? loadError.message : 'Khong the tai cau hinh he thong.');
+        } finally {
+            setLoading(false);
+        }
+    }, [request]);
+
+    useEffect(() => {
+        void loadSettings();
+    }, [loadSettings]);
+
+    const handleSave = useCallback(async () => {
+        if (!settings) {
+            return;
+        }
+
+        setSaving(true);
+
+        try {
+            const updated = await updateSettings(request, settings);
+            setSettings(mapSettingsToForm(updated));
+            toast({ type: 'success', title: 'Da luu cau hinh he thong' });
+        } catch (saveError) {
+            toast({
+                type: 'error',
+                title: 'Luu cau hinh that bai',
+                message: saveError instanceof Error ? saveError.message : 'Da xay ra loi khong xac dinh.',
+            });
+        } finally {
+            setSaving(false);
+        }
+    }, [request, settings, toast]);
+
+    if (error && !settings) {
+        return (
+            <motion.div variants={staggerContainer} initial="initial" animate="enter" className="space-y-6">
+                <motion.div variants={staggerItem}>
+                    <PageHeader title="Cau hinh he thong" description="Du lieu dang duoc doc tu bang SystemSettings that." />
+                </motion.div>
+                <motion.div variants={staggerItem}>
+                    <InlineState
+                        icon={<AlertCircle className="h-10 w-10" />}
+                        title="Khong the tai cau hinh"
+                        description={error}
+                        actions={(
+                            <Button variant="secondary" icon={<RefreshCw className="h-4 w-4" />} onClick={() => void loadSettings()}>
+                                Thu lai
+                            </Button>
+                        )}
+                    />
+                </motion.div>
+            </motion.div>
+        );
+    }
 
     return (
         <motion.div variants={staggerContainer} initial="initial" animate="enter" className="space-y-6">
             <motion.div variants={staggerItem}>
                 <PageHeader
-                    title="Cấu hình hệ thống"
-                    description="Cài đặt chung cho hệ thống thi ExamGuard"
-                    actions={<Button icon={<Save className="h-4 w-4" />} onClick={handleSave}>Lưu thay đổi</Button>}
+                    title="Cau hinh he thong"
+                    description="Cac gia tri ben duoi dang map truc tiep toi bang SystemSettings."
+                    actions={(
+                        <Button icon={<Save className="h-4 w-4" />} onClick={() => void handleSave()} loading={saving} disabled={!settings || loading}>
+                            Luu thay doi
+                        </Button>
+                    )}
                 />
             </motion.div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 max-w-4xl">
+            {!settings ? (
                 <motion.div variants={staggerItem}>
-                    <Panel title="Thông tin chung">
-                        <div className="space-y-4">
-                            <Input label="Tên hệ thống" value={settings.siteName} onChange={(e) => setSettings({ ...settings, siteName: e.target.value })} />
-                            <Input label="Số lần đăng nhập tối đa" type="number" value={String(settings.maxLoginAttempts)} onChange={(e) => setSettings({ ...settings, maxLoginAttempts: Number(e.target.value) })} hint="Số lần đăng nhập thất bại trước khi khóa tài khoản" />
-                            <Input label="Timeout phiên (phút)" type="number" value={String(settings.sessionTimeout)} onChange={(e) => setSettings({ ...settings, sessionTimeout: Number(e.target.value) })} />
-                        </div>
-                    </Panel>
+                    <InlineState title="Dang tai cau hinh" description="ExamGuard dang doc cau hinh he thong tu backend." />
                 </motion.div>
+            ) : (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 max-w-5xl">
+                    <motion.div variants={staggerItem}>
+                        <Panel title="Thong tin chung">
+                            <div className="space-y-4">
+                                <Input
+                                    label="Ten he thong"
+                                    value={settings.siteName}
+                                    onChange={(event) => setSettings((current) => current ? { ...current, siteName: event.target.value } : current)}
+                                />
+                                <Input
+                                    label="So lan dang nhap toi da"
+                                    type="number"
+                                    value={String(settings.maxLoginAttempts)}
+                                    onChange={(event) => setSettings((current) => current ? { ...current, maxLoginAttempts: Number(event.target.value) || 0 } : current)}
+                                />
+                                <Input
+                                    label="Session timeout (phut)"
+                                    type="number"
+                                    value={String(settings.sessionTimeoutMinutes)}
+                                    onChange={(event) => setSettings((current) => current ? { ...current, sessionTimeoutMinutes: Number(event.target.value) || 0 } : current)}
+                                />
+                            </div>
+                        </Panel>
+                    </motion.div>
 
-                <motion.div variants={staggerItem}>
-                    <Panel title="Chống gian lận">
-                        <div className="space-y-5">
-                            <Switch label="Cảnh báo khi rời tab" checked={settings.tabSwitchWarning} onChange={(v) => setSettings({ ...settings, tabSwitchWarning: v })} />
-                            <Input label="Giới hạn rời tab tối đa" type="number" value={String(settings.maxTabSwitches)} onChange={(e) => setSettings({ ...settings, maxTabSwitches: Number(e.target.value) })} hint="Số lần rời tab tối đa trong một phiên thi" />
-                            <Switch label="Tự động nộp bài khi vượt giới hạn" checked={settings.autoSubmitOnTabLimit} onChange={(v) => setSettings({ ...settings, autoSubmitOnTabLimit: v })} />
-                            <Switch label="Cho phép copy/paste" checked={settings.allowCopyPaste} onChange={(v) => setSettings({ ...settings, allowCopyPaste: v })} />
-                        </div>
-                    </Panel>
-                </motion.div>
+                    <motion.div variants={staggerItem}>
+                        <Panel title="Anti-cheat">
+                            <div className="space-y-5">
+                                <Switch
+                                    label="Canh bao khi roi tab"
+                                    checked={settings.tabSwitchWarning}
+                                    onChange={(value) => setSettings((current) => current ? { ...current, tabSwitchWarning: value } : current)}
+                                />
+                                <Input
+                                    label="Gioi han roi tab"
+                                    type="number"
+                                    value={String(settings.maxTabSwitches)}
+                                    onChange={(event) => setSettings((current) => current ? { ...current, maxTabSwitches: Number(event.target.value) || 0 } : current)}
+                                />
+                                <Switch
+                                    label="Auto-submit khi vuot gioi han"
+                                    checked={settings.autoSubmitOnTabLimit}
+                                    onChange={(value) => setSettings((current) => current ? { ...current, autoSubmitOnTabLimit: value } : current)}
+                                />
+                                <Switch
+                                    label="Cho phep copy/paste"
+                                    checked={settings.allowCopyPaste}
+                                    onChange={(value) => setSettings((current) => current ? { ...current, allowCopyPaste: value } : current)}
+                                />
+                                <Input
+                                    label="Nguong rapid answer (giay)"
+                                    type="number"
+                                    value={String(settings.rapidAnswerThresholdSeconds)}
+                                    onChange={(event) => setSettings((current) => current ? { ...current, rapidAnswerThresholdSeconds: Number(event.target.value) || 0 } : current)}
+                                />
+                            </div>
+                        </Panel>
+                    </motion.div>
 
-                <motion.div variants={staggerItem}>
-                    <Panel title="Hiển thị kết quả">
-                        <div className="space-y-5">
-                            <Switch label="Cho sinh viên xem kết quả" checked={settings.showResultToStudent} onChange={(v) => setSettings({ ...settings, showResultToStudent: v })} />
-                        </div>
-                    </Panel>
-                </motion.div>
+                    <motion.div variants={staggerItem}>
+                        <Panel title="Hien thi va ket qua">
+                            <div className="space-y-5">
+                                <Switch
+                                    label="Cho sinh vien xem ket qua"
+                                    checked={settings.showResultToStudent}
+                                    onChange={(value) => setSettings((current) => current ? { ...current, showResultToStudent: value } : current)}
+                                />
+                            </div>
+                        </Panel>
+                    </motion.div>
 
-                <motion.div variants={staggerItem}>
-                    <Panel title="Bảo trì">
-                        <div className="space-y-5">
-                            <Switch label="Chế độ bảo trì" checked={settings.maintenanceMode} onChange={(v) => setSettings({ ...settings, maintenanceMode: v })} />
-                            {settings.maintenanceMode && (
-                                <div className="bg-warning/5 border border-warning/20 rounded-[var(--radius-md)] p-3">
-                                    <p className="text-xs text-warning font-medium">Khi bật chế độ bảo trì, sinh viên sẽ không thể truy cập hệ thống.</p>
-                                </div>
-                            )}
-                        </div>
-                    </Panel>
-                </motion.div>
-            </div>
+                    <motion.div variants={staggerItem}>
+                        <Panel title="Bao tri">
+                            <div className="space-y-5">
+                                <Switch
+                                    label="Bat maintenance mode"
+                                    checked={settings.maintenanceMode}
+                                    onChange={(value) => setSettings((current) => current ? { ...current, maintenanceMode: value } : current)}
+                                />
+                            </div>
+                        </Panel>
+                    </motion.div>
+                </div>
+            )}
         </motion.div>
     );
 }

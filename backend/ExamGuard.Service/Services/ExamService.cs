@@ -238,7 +238,12 @@ public class ExamService : IExamService
         var sessionIds = sessions.Select(s => s.Id).ToList();
         var existingAttempts = await _db.ExamAttempts
             .Where(a => a.StudentId == studentId && sessionIds.Contains(a.SessionId))
-            .Select(a => a.SessionId)
+            .Select(a => new
+            {
+                a.SessionId,
+                a.Id,
+                a.Status
+            })
             .ToListAsync();
 
         return sessions.Select(s => new AvailableSessionDto
@@ -246,15 +251,23 @@ public class ExamService : IExamService
             SessionId = s.Id,
             ExamId = s.ExamId,
             ExamTitle = s.Exam.Title,
+            ExamDescription = s.Exam.Description,
             SubjectName = s.Exam.Subject.Name,
+            SubjectCode = s.Exam.Subject.Code,
             SessionName = s.Name,
             QuestionCount = s.Exam.QuestionCount,
             DurationMinutes = s.Exam.DurationMinutes,
+            TotalPoints = s.Exam.TotalPoints,
             StartTime = s.StartTime,
             EndTime = s.EndTime,
             RequiresPassword = !string.IsNullOrEmpty(s.Password),
             Status = s.StartTime <= now && s.EndTime > now ? "Active" : "Scheduled",
-            HasExistingAttempt = existingAttempts.Contains(s.Id)
+            HasExistingAttempt = existingAttempts.Any(a => a.SessionId == s.Id),
+            AttemptId = existingAttempts.FirstOrDefault(a => a.SessionId == s.Id)?.Id,
+            AttemptStatus = existingAttempts.FirstOrDefault(a => a.SessionId == s.Id)?.Status.ToString(),
+            ShowResultToStudent = s.Exam.ShowResultToStudent,
+            ShuffleQuestions = s.Exam.ShuffleQuestions,
+            ShuffleOptions = s.Exam.ShuffleOptions
         }).ToList();
     }
 
