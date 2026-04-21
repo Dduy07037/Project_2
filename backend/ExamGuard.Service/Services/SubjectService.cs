@@ -19,14 +19,17 @@ public class SubjectService : ISubjectService
         _logger = logger;
     }
 
+    /// <summary>
+    /// Danh mục môn học dùng chung (admin quản lý). Giảng viên cần thấy toàn bộ môn để gắn kỳ thi / ngân hàng câu hỏi,
+    /// không chỉ môn do chính họ tạo — tham số lecturerId giữ để tương thích interface, không còn lọc theo người tạo.
+    /// </summary>
     public async Task<List<SubjectDto>> GetSubjectsAsync(Guid? lecturerId)
     {
+        _ = lecturerId;
+
         var query = _db.Subjects
             .Include(s => s.CreatedBy)
             .AsQueryable();
-
-        if (lecturerId.HasValue)
-            query = query.Where(s => s.CreatedById == lecturerId.Value);
 
         return await query
             .OrderBy(s => s.Code)

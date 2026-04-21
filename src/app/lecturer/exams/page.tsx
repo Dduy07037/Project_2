@@ -29,7 +29,7 @@ import {
 } from '@/lib/api/exam-guard';
 import { formatDuration } from '@/lib/utils';
 import { staggerContainer, staggerItem } from '@/lib/motion';
-import { AlertCircle, ArrowRight, FileText, Plus, RefreshCw } from 'lucide-react';
+import { AlertCircle, ArrowRight, BookOpen, FileText, Plus, RefreshCw } from 'lucide-react';
 
 const emptyExamForm: CreateExamRequest = {
     title: '',
@@ -51,34 +51,61 @@ export default function LecturerExamsPage() {
     const [exams, setExams] = useState<ExamDto[]>([]);
     const [subjects, setSubjects] = useState<SubjectDto[]>([]);
     const [search, setSearch] = useState('');
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
+    const [loadingExams, setLoadingExams] = useState(true);
+    const [loadingSubjects, setLoadingSubjects] = useState(true);
+    const [examsError, setExamsError] = useState<string | null>(null);
+    const [subjectsError, setSubjectsError] = useState<string | null>(null);
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [submitting, setSubmitting] = useState(false);
     const [createForm, setCreateForm] = useState<CreateExamRequest>(emptyExamForm);
 
     const loadExams = useCallback(async () => {
-        setLoading(true);
-        setError(null);
+        setLoadingExams(true);
+        setExamsError(null);
 
         try {
-            const [examsResponse, subjectsResponse] = await Promise.all([
-                getExams(request),
-                getSubjects(request),
-            ]);
-
-            setExams(examsResponse);
-            setSubjects(subjectsResponse);
+            setExams(await getExams(request));
         } catch (loadError) {
-            setError(loadError instanceof Error ? loadError.message : 'Khong the tai danh sach ky thi.');
+            setExamsError(loadError instanceof Error ? loadError.message : 'Không thể tải danh sách kỳ thi.');
         } finally {
-            setLoading(false);
+            setLoadingExams(false);
         }
     }, [request]);
 
+    const loadSubjects = useCallback(async () => {
+        setLoadingSubjects(true);
+        setSubjectsError(null);
+
+        try {
+            setSubjects(await getSubjects(request));
+        } catch (loadError) {
+            setSubjectsError(loadError instanceof Error ? loadError.message : 'Không thể tải danh sách môn học.');
+        } finally {
+            setLoadingSubjects(false);
+        }
+    }, [request]);
+
+    const loadPage = useCallback(async () => {
+        await Promise.all([loadExams(), loadSubjects()]);
+    }, [loadExams, loadSubjects]);
+
     useEffect(() => {
-        void loadExams();
-    }, [loadExams]);
+        void loadPage();
+    }, [loadPage]);
+
+    useEffect(() => {
+        if (showCreateModal) {
+            void loadSubjects();
+        }
+    }, [showCreateModal, loadSubjects]);
+
+    const selectableSubjects = useMemo(
+        () => subjects.filter((subject) => subject.isActive),
+        [subjects],
+    );
+
+    const createFormLocked =
+        !!subjectsError || loadingSubjects || selectableSubjects.length === 0;
 
     const filteredExams = useMemo(() => {
         const query = search.trim().toLowerCase();
@@ -118,7 +145,7 @@ export default function LecturerExamsPage() {
             });
             setShowCreateModal(false);
             setCreateForm(emptyExamForm);
-            await loadExams();
+            await loadPage();
             router.push(`/lecturer/exams/${created.id}`);
         } catch (createError) {
             toast({
@@ -129,7 +156,7 @@ export default function LecturerExamsPage() {
         } finally {
             setSubmitting(false);
         }
-    }, [createForm, loadExams, request, router, toast]);
+    }, [createForm, loadPage, request, router, toast]);
 
     const columns = [
         {
@@ -190,19 +217,19 @@ export default function LecturerExamsPage() {
             </motion.div>
 
             <motion.div variants={staggerItem}>
-                {error ? (
+                {examsError ? (
                     <InlineState
                         icon={<AlertCircle className="h-10 w-10" />}
-                        title="Khong the tai ky thi"
-                        description={error}
+                        title="Không thể tải kỳ thi"
+                        description={examsError}
                         actions={(
                             <Button variant="secondary" icon={<RefreshCw className="h-4 w-4" />} onClick={() => void loadExams()}>
-                                Thu lai
+                                Thử lại
                             </Button>
                         )}
                     />
                 ) : (
-                    <DataTable columns={columns} data={filteredExams} loading={loading} emptyMessage="Chua co ky thi nao phu hop." />
+                    <DataTable columns={columns} data={filteredExams} loading={loadingExams} emptyMessage="Chưa có kỳ thi nào phù hợp." />
                 )}
             </motion.div>
 
@@ -218,67 +245,111 @@ export default function LecturerExamsPage() {
                 size="lg"
             >
                 <div className="space-y-4">
-                    <Select
-                        label="Mon hoc"
-                        value={createForm.subjectId}
-                        onChange={(value) => setCreateForm((current) => ({ ...current, subjectId: value }))}
-                        options={subjects.map((subject) => ({ value: subject.id, label: `${subject.code} - ${subject.name}` }))}
-                    />
+                    {subjectsError ? (
+                        <InlineState
+                            icon={<AlertCircle className="h-8 w-8" />}
+                            title="Không tải được môn học"
+                            description={subjectsError}
+                            actions={(
+                                <Button
+                                    variant="secondary"
+                                    size="sm"
+                                    icon={<RefreshCw className="h-4 w-4" />}
+                                    onClick={() => void loadSubjects()}
+                                >
+                                    Thử lại
+                                </Button>
+                            )}
+                        />
+                    ) : loadingSubjects ? (
+                        <p className="text-sm text-text-muted">Đang tải danh sách môn học...</p>
+                    ) : selectableSubjects.length === 0 ? (
+                        <InlineState
+                            icon={<BookOpen className="h-8 w-8" />}
+                            title="Chưa có môn học để chọn"
+                            description="Hệ thống chưa có môn học đang hoạt động. Vui lòng nhờ quản trị viên tạo môn học tại trang Quản lý môn học trước khi tạo kỳ thi."
+                        />
+                    ) : (
+                        <Select
+                            label="Môn học"
+                            placeholder="-- Chọn môn học --"
+                            value={createForm.subjectId}
+                            onChange={(value) => setCreateForm((current) => ({ ...current, subjectId: value }))}
+                            options={selectableSubjects.map((subject) => ({
+                                value: subject.id,
+                                label: `${subject.code} — ${subject.name}`,
+                            }))}
+                            disabled={submitting}
+                        />
+                    )}
                     <Input
-                        label="Ten ky thi"
+                        label="Tên kỳ thi"
                         value={createForm.title}
                         onChange={(event) => setCreateForm((current) => ({ ...current, title: event.target.value }))}
-                        placeholder="Midterm - Co so du lieu"
+                        placeholder="Midterm - Cơ sở dữ liệu"
+                        disabled={createFormLocked || submitting}
                     />
                     <Input
-                        label="Mo ta"
+                        label="Mô tả"
                         value={createForm.description ?? ''}
                         onChange={(event) => setCreateForm((current) => ({ ...current, description: event.target.value }))}
-                        placeholder="Mo ta ngan cho ky thi"
+                        placeholder="Mô tả ngắn cho kỳ thi"
+                        disabled={createFormLocked || submitting}
                     />
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <Input
-                            label="So cau hoi"
+                            label="Số câu hỏi"
                             type="number"
                             value={String(createForm.questionCount)}
                             onChange={(event) => setCreateForm((current) => ({ ...current, questionCount: Number(event.target.value) || 0 }))}
+                            disabled={createFormLocked || submitting}
                         />
                         <Input
-                            label="Thoi gian (phut)"
+                            label="Thời gian (phút)"
                             type="number"
                             value={String(createForm.durationMinutes)}
                             onChange={(event) => setCreateForm((current) => ({ ...current, durationMinutes: Number(event.target.value) || 0 }))}
+                            disabled={createFormLocked || submitting}
                         />
                         <Input
-                            label="Tong diem"
+                            label="Tổng điểm"
                             type="number"
                             value={String(createForm.totalPoints)}
                             onChange={(event) => setCreateForm((current) => ({ ...current, totalPoints: Number(event.target.value) || 0 }))}
+                            disabled={createFormLocked || submitting}
                         />
                     </div>
                     <div className="space-y-3">
                         <Switch
-                            label="Tron cau hoi"
+                            label="Trộn câu hỏi"
                             checked={createForm.shuffleQuestions}
                             onChange={(value) => setCreateForm((current) => ({ ...current, shuffleQuestions: value }))}
+                            disabled={createFormLocked || submitting}
                         />
                         <Switch
-                            label="Tron dap an"
+                            label="Trộn đáp án"
                             checked={createForm.shuffleOptions}
                             onChange={(value) => setCreateForm((current) => ({ ...current, shuffleOptions: value }))}
+                            disabled={createFormLocked || submitting}
                         />
                         <Switch
-                            label="Cho sinh vien xem ket qua"
+                            label="Cho sinh viên xem kết quả"
                             checked={createForm.showResultToStudent}
                             onChange={(value) => setCreateForm((current) => ({ ...current, showResultToStudent: value }))}
+                            disabled={createFormLocked || submitting}
                         />
                     </div>
                     <div className="flex justify-end gap-2 pt-2">
                         <Button variant="ghost" onClick={() => setShowCreateModal(false)} disabled={submitting}>
-                            Huy
+                            Hủy
                         </Button>
-                        <Button onClick={() => void handleCreateExam()} loading={submitting} icon={<FileText className="h-4 w-4" />}>
-                            Tao draft exam
+                        <Button
+                            onClick={() => void handleCreateExam()}
+                            loading={submitting}
+                            disabled={createFormLocked || submitting}
+                            icon={<FileText className="h-4 w-4" />}
+                        >
+                            Tạo draft exam
                         </Button>
                     </div>
                 </div>
