@@ -25,8 +25,8 @@ import {
     type SubjectDto,
     type UserDto,
 } from '@/lib/api/exam-guard';
-import { formatDateTime } from '@/lib/utils';
 import { staggerContainer, staggerItem } from '@/lib/motion';
+import { formatDateTime } from '@/lib/utils';
 import {
     AlertCircle,
     AlertTriangle,
@@ -43,6 +43,7 @@ interface DashboardData {
     exams: ExamDto[];
     activity: ActivityItemDto[];
     flaggedAttempts: MonitoringAttemptDto[];
+    snapshotAt: number;
 }
 
 export default function AdminDashboard() {
@@ -51,17 +52,19 @@ export default function AdminDashboard() {
     const [data, setData] = useState<DashboardData | null>(null);
     const [error, setError] = useState<string | null>(null);
 
+    const fetchDashboard = useCallback(async () => Promise.all([
+        getUsers(request, { page: 1, pageSize: 200 }),
+        getSubjects(request),
+        getExams(request),
+        getActivity(request, 8),
+        getMonitoringAttempts(request, { flaggedOnly: true, limit: 8 }),
+    ]), [request]);
+
     const loadDashboard = useCallback(async () => {
         setError(null);
 
         try {
-            const [usersResponse, subjectsResponse, examsResponse, activityResponse, flaggedResponse] = await Promise.all([
-                getUsers(request, { page: 1, pageSize: 200 }),
-                getSubjects(request),
-                getExams(request),
-                getActivity(request, 8),
-                getMonitoringAttempts(request, { flaggedOnly: true, limit: 8 }),
-            ]);
+            const [usersResponse, subjectsResponse, examsResponse, activityResponse, flaggedResponse] = await fetchDashboard();
 
             setData({
                 users: usersResponse.items,
@@ -69,16 +72,48 @@ export default function AdminDashboard() {
                 exams: examsResponse,
                 activity: activityResponse,
                 flaggedAttempts: flaggedResponse,
+                snapshotAt: Date.now(),
             });
         } catch (loadError) {
             setError(loadError instanceof Error ? loadError.message : 'Khong the tai dashboard admin.');
-        } finally {
         }
-    }, [request]);
+    }, [fetchDashboard]);
 
     useEffect(() => {
-        void loadDashboard();
-    }, [loadDashboard]);
+        let cancelled = false;
+
+        async function hydrateDashboard() {
+            try {
+                const [usersResponse, subjectsResponse, examsResponse, activityResponse, flaggedResponse] = await fetchDashboard();
+
+                if (cancelled) {
+                    return;
+                }
+
+                setError(null);
+                setData({
+                    users: usersResponse.items,
+                    subjects: subjectsResponse,
+                    exams: examsResponse,
+                    activity: activityResponse,
+                    flaggedAttempts: flaggedResponse,
+                    snapshotAt: Date.now(),
+                });
+            } catch (loadError) {
+                if (cancelled) {
+                    return;
+                }
+
+                setError(loadError instanceof Error ? loadError.message : 'Khong the tai dashboard admin.');
+            }
+        }
+
+        void hydrateDashboard();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [fetchDashboard]);
 
     const stats = useMemo(() => {
         if (!data) {
@@ -91,9 +126,9 @@ export default function AdminDashboard() {
             };
         }
 
-        const now = Date.now();
-        const activeSessions = data.exams.flatMap((exam) => exam.sessions)
-            .filter((session) => new Date(session.startTime).getTime() <= now && new Date(session.endTime).getTime() > now)
+        const activeSessions = data.exams
+            .flatMap((exam) => exam.sessions)
+            .filter((session) => new Date(session.startTime).getTime() <= data.snapshotAt && new Date(session.endTime).getTime() > data.snapshotAt)
             .length;
 
         return {
@@ -110,13 +145,13 @@ export default function AdminDashboard() {
             <motion.div variants={staggerItem}>
                 <PageHeader
                     title="Dashboard"
-                    description="Tong hop du lieu thuc tu users, subjects, exams, attempts va activity."
+                    description="Tong hop nguoi dung, mon hoc, ky thi va cac tin hieu can theo doi trong he thong."
                 />
             </motion.div>
 
-            <motion.div variants={staggerItem} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <motion.div variants={staggerItem} className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 <StatCard label="Tong nguoi dung" value={stats.totalUsers} icon={<Users className="h-5 w-5" />} accentColor="var(--color-accent)" />
-                <StatCard label="Giang vien" value={stats.totalLecturers} icon={<GraduationCap className="h-5 w-5" />} accentColor="var(--color-accent-cyan)" />
+                <StatCard label="Giang vien" value={stats.totalLecturers} icon={<GraduationCap className="h-5 w-5" />} accentColor="var(--color-text-secondary)" />
                 <StatCard label="Ca thi dang mo" value={stats.activeSessions} icon={<FileText className="h-5 w-5" />} accentColor="var(--color-success)" />
                 <StatCard label="Can xem xet" value={stats.warnings} icon={<AlertTriangle className="h-5 w-5" />} accentColor="var(--color-warning)" />
             </motion.div>
@@ -139,11 +174,11 @@ export default function AdminDashboard() {
                     <InlineState title="Dang tai dashboard" description="ExamGuard dang tong hop du lieu he thong." />
                 </motion.div>
             ) : (
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
                     <motion.div variants={staggerItem} className="lg:col-span-2">
                         <Panel
                             title="Activity gan day"
-                            description="Du lieu tu endpoint /api/activity"
+                            description="Dau vet cap nhat gan nhat tu he thong van hanh."
                             action={(
                                 <Link href="/admin/activity">
                                     <Button variant="ghost" size="sm" iconRight={<ArrowRight className="h-3 w-3" />}>
@@ -154,19 +189,19 @@ export default function AdminDashboard() {
                         >
                             <div className="space-y-3">
                                 {data.activity.map((item) => (
-                                    <div key={item.id} className="flex items-start gap-3 py-2 border-b border-border last:border-b-0">
+                                    <div key={item.id} className="flex items-start gap-3 border-b border-border pb-3 last:border-b-0 last:pb-0">
                                         <Avatar name={item.userName} size="sm" />
-                                        <div className="flex-1 min-w-0">
+                                        <div className="min-w-0 flex-1">
                                             <p className="text-sm text-text-primary">
                                                 <span className="font-medium">{item.userName}</span>
-                                                <span className="text-text-muted"> · {item.action}</span>
+                                                <span className="text-text-muted"> - {item.action}</span>
                                             </p>
-                                            <p className="text-xs text-text-muted mt-0.5">
+                                            <p className="mt-0.5 text-xs text-text-muted">
                                                 {item.target}
-                                                {item.details ? ` · ${item.details}` : ''}
+                                                {item.details ? ` - ${item.details}` : ''}
                                             </p>
                                         </div>
-                                        <span className="text-[11px] text-text-muted whitespace-nowrap">{formatDateTime(item.timestamp)}</span>
+                                        <span className="whitespace-nowrap text-[11px] text-text-muted">{formatDateTime(item.timestamp)}</span>
                                     </div>
                                 ))}
                             </div>
@@ -174,19 +209,19 @@ export default function AdminDashboard() {
                     </motion.div>
 
                     <motion.div variants={staggerItem} className="space-y-4">
-                        <Panel title="Phan bo vai tro">
+                        <Panel title="Phan bo vai tro" description="Ty trong nguoi dung theo tung nhom quyen.">
                             <div className="space-y-3">
                                 {[
-                                    { label: 'Admin', count: data.users.filter((user) => user.role.toLowerCase() === 'admin').length, total: data.users.length, color: 'bg-danger' },
-                                    { label: 'Giang vien', count: stats.totalLecturers, total: data.users.length, color: 'bg-accent-cyan' },
+                                    { label: 'Admin', count: data.users.filter((user) => user.role.toLowerCase() === 'admin').length, total: data.users.length, color: 'bg-text-primary' },
+                                    { label: 'Giang vien', count: stats.totalLecturers, total: data.users.length, color: 'bg-text-secondary' },
                                     { label: 'Sinh vien', count: stats.totalStudents, total: data.users.length, color: 'bg-accent' },
                                 ].map((item) => (
                                     <div key={item.label}>
-                                        <div className="flex items-center justify-between text-xs mb-1.5">
-                                            <span className="text-text-secondary font-medium">{item.label}</span>
+                                        <div className="mb-1.5 flex items-center justify-between text-xs">
+                                            <span className="font-medium text-text-secondary">{item.label}</span>
                                             <span className="text-text-muted">{item.count}/{item.total}</span>
                                         </div>
-                                        <div className="h-1.5 bg-bg-tertiary rounded-full overflow-hidden">
+                                        <div className="h-1.5 overflow-hidden rounded-full bg-bg-tertiary">
                                             <div
                                                 className={`h-full rounded-full ${item.color}`}
                                                 style={{ width: `${item.total === 0 ? 0 : (item.count / item.total) * 100}%` }}
@@ -197,13 +232,13 @@ export default function AdminDashboard() {
                             </div>
                         </Panel>
 
-                        <Panel title="Mon hoc noi bat">
+                        <Panel title="Mon hoc noi bat" description="Danh sach mon hoc dang hoat dong gan day.">
                             <div className="space-y-2">
                                 {data.subjects.slice(0, 4).map((subject) => (
                                     <div key={subject.id} className="flex items-center justify-between py-1.5">
-                                        <div>
+                                        <div className="min-w-0">
                                             <p className="text-sm font-medium text-text-primary">{subject.code}</p>
-                                            <p className="text-xs text-text-muted">{subject.name}</p>
+                                            <p className="truncate text-xs text-text-muted">{subject.name}</p>
                                         </div>
                                         <StatusBadge status={subject.isActive ? 'active' : 'disabled'} />
                                     </div>
@@ -211,19 +246,19 @@ export default function AdminDashboard() {
                             </div>
                         </Panel>
 
-                        <Panel title="Attempt can xem xet">
+                        <Panel title="Attempt can xem xet" description="Cac bai lam co dau hieu can hau kiem.">
                             <div className="space-y-3">
                                 {data.flaggedAttempts.length === 0 ? (
                                     <p className="text-sm text-text-muted">Chua co attempt bat thuong nao.</p>
                                 ) : data.flaggedAttempts.slice(0, 4).map((item) => (
-                                    <div key={item.attempt.id} className="flex items-start gap-3 py-2 border-b border-border last:border-b-0">
-                                        <div className="w-8 h-8 rounded-full bg-warning/10 flex items-center justify-center shrink-0">
+                                    <div key={item.attempt.id} className="flex items-start gap-3 border-b border-border pb-3 last:border-b-0 last:pb-0">
+                                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-warning/10">
                                             <AlertTriangle className="h-4 w-4 text-warning" />
                                         </div>
                                         <div className="min-w-0">
                                             <p className="text-sm font-medium text-text-primary">{item.attempt.studentName}</p>
                                             <p className="text-xs text-text-muted">{item.attempt.examTitle}</p>
-                                            <p className="text-xs text-warning mt-1">{item.attempt.flagReason || 'Flagged by event logs'}</p>
+                                            <p className="mt-1 text-xs text-warning">{item.attempt.flagReason || 'Flagged by event logs'}</p>
                                         </div>
                                     </div>
                                 ))}

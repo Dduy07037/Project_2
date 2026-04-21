@@ -3,184 +3,263 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { motion, AnimatePresence } from 'framer-motion';
-import { cn } from '@/lib/cn';
-import { SearchInput } from '@/components/ui/input';
+import { AnimatePresence, motion } from 'framer-motion';
+import {
+  Bell,
+  ChevronDown,
+  ChevronRight,
+  LogOut,
+  Menu,
+  Search,
+  Settings,
+  User,
+} from 'lucide-react';
 import { Avatar } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Bell, ChevronDown, ChevronRight, LogOut, Search, Settings, User } from 'lucide-react';
+import { SearchInput } from '@/components/ui/input';
+import { cn } from '@/lib/cn';
 
 interface TopbarNotification {
-    id: string;
-    title: string;
-    message?: string;
-    href?: string;
-    read?: boolean;
+  id: string;
+  title: string;
+  message?: string;
+  href?: string;
+  read?: boolean;
 }
 
 interface TopbarProps {
-    userName: string;
-    userRole: string;
-    sidebarCollapsed: boolean;
-    onLogout: () => Promise<void>;
-    notifications?: TopbarNotification[];
+  userName: string;
+  userRole: string;
+  onLogout: () => Promise<void>;
+  onOpenSidebar: () => void;
+  notifications?: TopbarNotification[];
 }
 
-export function Topbar({ userName, userRole, sidebarCollapsed, onLogout, notifications = [] }: TopbarProps) {
-    const pathname = usePathname();
-    const [showNotifications, setShowNotifications] = useState(false);
-    const [showUserMenu, setShowUserMenu] = useState(false);
-    const [showSearch, setShowSearch] = useState(false);
+export function Topbar({
+  userName,
+  userRole,
+  onLogout,
+  onOpenSidebar,
+  notifications = [],
+}: TopbarProps) {
+  const pathname = usePathname();
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [showUserMenu, setShowUserMenu] = useState(false);
+  const [showSearch, setShowSearch] = useState(false);
 
-    const unreadCount = notifications.filter((notification) => !notification.read).length;
-    const segments = pathname?.split('/').filter(Boolean) || [];
-    const settingsHref = userRole === 'admin' ? '/admin/settings' : '/profile';
-    const roleLabels: Record<string, string> = { admin: 'Admin', lecturer: 'Giang vien', student: 'Sinh vien' };
+  const unreadCount = notifications.filter((notification) => !notification.read).length;
+  const segments = pathname?.split('/').filter(Boolean) || [];
+  const settingsHref = userRole === 'admin' ? '/admin/settings' : '/profile';
+  const roleLabels: Record<string, string> = {
+    admin: 'Admin',
+    lecturer: 'Giang vien',
+    student: 'Sinh vien',
+  };
 
-    return (
-        <header
-            className={cn(
-                'fixed top-3 right-3 h-14 rounded-[var(--radius-xl)] glass-heavy shadow-lg flex items-center px-5 gap-4 z-[var(--z-sticky)]',
-                'transition-[left] duration-400 ease-[var(--ease-out-expo)]',
-            )}
-            style={{ left: sidebarCollapsed ? 96 : 284 }}
+  return (
+    <div className="sticky top-4 z-[var(--z-sticky)]">
+      <header className="surface-panel relative flex min-h-16 items-center gap-3 rounded-[var(--radius-xl)] px-4 py-3">
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={onOpenSidebar}
+          className="lg:hidden"
+          aria-label="Open navigation"
         >
-            <nav className="flex items-center gap-1.5 text-sm min-w-0 flex-1">
-                {segments.map((segment, index) => {
-                    const href = `/${segments.slice(0, index + 1).join('/')}`;
-                    const label = segment.charAt(0).toUpperCase() + segment.slice(1).replace(/-/g, ' ');
-                    const isLast = index === segments.length - 1;
+          <Menu className="h-4 w-4" />
+        </Button>
 
-                    return (
-                        <span key={href} className="flex items-center gap-1.5 whitespace-nowrap">
-                            {index > 0 && <ChevronRight className="h-3 w-3 text-text-muted/40 shrink-0" />}
-                            {isLast ? (
-                                <span className="text-text-primary font-semibold">{label}</span>
-                            ) : (
-                                <Link href={href} className="text-text-muted hover:text-text-secondary transition-colors">
-                                    {label}
-                                </Link>
-                            )}
-                        </span>
-                    );
-                })}
-            </nav>
+        <nav className="hidden min-w-0 flex-1 items-center gap-1 text-sm md:flex">
+          {segments.length === 0 ? (
+            <span className="font-medium text-text-primary">Overview</span>
+          ) : (
+            segments.map((segment, index) => {
+              const href = `/${segments.slice(0, index + 1).join('/')}`;
+              const label =
+                segment.charAt(0).toUpperCase() + segment.slice(1).replace(/-/g, ' ');
+              const isLast = index === segments.length - 1;
 
-            <div className="flex items-center gap-1.5">
-                <Button variant="ghost" size="icon" onClick={() => setShowSearch((current) => !current)}>
-                    <Search className="h-4 w-4" />
-                </Button>
+              return (
+                <span key={href} className="flex items-center gap-1.5 whitespace-nowrap">
+                  {index > 0 && <ChevronRight className="h-3 w-3 text-text-muted" />}
+                  {isLast ? (
+                    <span className="font-medium text-text-primary">{label}</span>
+                  ) : (
+                    <Link href={href} className="text-text-muted transition-colors hover:text-text-primary">
+                      {label}
+                    </Link>
+                  )}
+                </span>
+              );
+            })
+          )}
+        </nav>
 
-                <div className="relative">
-                    <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => {
-                            setShowNotifications((current) => !current);
-                            setShowUserMenu(false);
-                        }}
-                    >
-                        <Bell className="h-4 w-4" />
-                        {unreadCount > 0 && <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-danger rounded-full border-2 border-bg-primary" />}
-                    </Button>
+        <div className="ml-auto flex items-center gap-1.5">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setShowSearch((current) => !current)}
+            aria-label="Toggle search"
+          >
+            <Search className="h-4 w-4" />
+          </Button>
 
-                    <AnimatePresence>
-                        {showNotifications && (
-                            <>
-                                <div className="fixed inset-0 z-40" onClick={() => setShowNotifications(false)} />
-                                <motion.div
-                                    initial={{ opacity: 0, y: 8, scale: 0.95 }}
-                                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                                    exit={{ opacity: 0, y: 8, scale: 0.95 }}
-                                    transition={{ duration: 0.2 }}
-                                    className="absolute right-0 top-full mt-3 w-80 glass-heavy rounded-[var(--radius-xl)] shadow-xl overflow-hidden z-50 border border-border-glass-strong"
-                                >
-                                    <div className="px-4 py-3 border-b border-border-glass flex items-center justify-between">
-                                        <h4 className="text-sm font-bold text-text-primary">Thong bao</h4>
-                                        {unreadCount > 0 && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-danger/15 text-danger">{unreadCount} moi</span>}
-                                    </div>
-                                    <div className="max-h-64 overflow-y-auto">
-                                        {notifications.length === 0 ? (
-                                            <div className="px-4 py-8 text-center text-sm text-text-muted">Chua co thong bao nao tu du lieu that.</div>
-                                        ) : notifications.map((notification) => (
-                                            <Link
-                                                key={notification.id}
-                                                href={notification.href || '#'}
-                                                className={cn('block px-4 py-3 border-b border-border-glass/50 last:border-b-0 hover:bg-surface-hover', !notification.read && 'bg-accent/5')}
-                                            >
-                                                <p className="text-sm font-semibold text-text-primary">{notification.title}</p>
-                                                {notification.message && <p className="text-xs text-text-muted mt-0.5">{notification.message}</p>}
-                                            </Link>
-                                        ))}
-                                    </div>
-                                </motion.div>
-                            </>
-                        )}
-                    </AnimatePresence>
-                </div>
-
-                <div className="relative ml-1">
-                    <button
-                        onClick={() => {
-                            setShowUserMenu((current) => !current);
-                            setShowNotifications(false);
-                        }}
-                        className="flex items-center gap-2.5 hover:bg-surface-hover rounded-[var(--radius-md)] px-2.5 py-1.5 transition-all duration-200 cursor-pointer group"
-                    >
-                        <Avatar name={userName} size="sm" />
-                        <div className="hidden sm:block text-left">
-                            <p className="text-xs font-semibold text-text-primary leading-none">{userName}</p>
-                            <p className="text-[10px] text-text-muted">{roleLabels[userRole] || userRole}</p>
-                        </div>
-                        <ChevronDown className="h-3 w-3 text-text-muted hidden sm:block group-hover:text-text-secondary transition-colors" />
-                    </button>
-
-                    <AnimatePresence>
-                        {showUserMenu && (
-                            <>
-                                <div className="fixed inset-0 z-40" onClick={() => setShowUserMenu(false)} />
-                                <motion.div
-                                    initial={{ opacity: 0, y: 8, scale: 0.95 }}
-                                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                                    exit={{ opacity: 0, y: 8, scale: 0.95 }}
-                                    transition={{ duration: 0.2 }}
-                                    className="absolute right-0 top-full mt-3 w-48 glass-heavy rounded-[var(--radius-lg)] shadow-xl py-1.5 z-50 border border-border-glass-strong"
-                                >
-                                    <Link href="/profile" className="flex items-center gap-2.5 px-3.5 py-2.5 text-sm text-text-secondary hover:text-text-primary hover:bg-surface-hover rounded-[var(--radius-sm)] mx-1">
-                                        <User className="h-4 w-4" /> Ho so
-                                    </Link>
-                                    <Link href={settingsHref} className="flex items-center gap-2.5 px-3.5 py-2.5 text-sm text-text-secondary hover:text-text-primary hover:bg-surface-hover rounded-[var(--radius-sm)] mx-1">
-                                        <Settings className="h-4 w-4" /> Cai dat
-                                    </Link>
-                                    <div className="h-px bg-border-glass mx-3 my-1.5" />
-                                    <button
-                                        onClick={() => void onLogout()}
-                                        className="flex items-center gap-2.5 px-3.5 py-2.5 text-sm text-danger hover:bg-danger/8 w-full cursor-pointer rounded-[var(--radius-sm)] mx-1"
-                                    >
-                                        <LogOut className="h-4 w-4" /> Dang xuat
-                                    </button>
-                                </motion.div>
-                            </>
-                        )}
-                    </AnimatePresence>
-                </div>
-            </div>
+          <div className="relative">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => {
+                setShowNotifications((current) => !current);
+                setShowUserMenu(false);
+              }}
+              aria-label="Toggle notifications"
+            >
+              <Bell className="h-4 w-4" />
+              {unreadCount > 0 && (
+                <span className="absolute top-2.5 right-2.5 h-2 w-2 rounded-full bg-danger" />
+              )}
+            </Button>
 
             <AnimatePresence>
-                {showSearch && (
-                    <motion.div
-                        initial={{ opacity: 0, y: -8 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -8 }}
-                        transition={{ duration: 0.2 }}
-                        className="absolute left-0 right-0 top-full mt-3 glass-heavy rounded-[var(--radius-xl)] px-5 py-3.5 shadow-xl border border-border-glass-strong"
-                    >
-                        <SearchInput placeholder="Tim kiem..." autoFocus onKeyDown={(event) => event.key === 'Escape' && setShowSearch(false)} />
-                    </motion.div>
-                )}
+              {showNotifications && (
+                <>
+                  <button
+                    type="button"
+                    className="fixed inset-0 z-40"
+                    onClick={() => setShowNotifications(false)}
+                  />
+                  <motion.div
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 8 }}
+                    transition={{ duration: 0.18 }}
+                    className="surface-panel absolute right-0 top-[calc(100%+0.75rem)] z-50 w-80 overflow-hidden rounded-[var(--radius-lg)]"
+                  >
+                    <div className="flex items-center justify-between border-b border-border-subtle px-4 py-3">
+                      <h4 className="text-sm font-medium text-text-primary">Thong bao</h4>
+                      {unreadCount > 0 && (
+                        <span className="rounded-full bg-danger/8 px-2 py-1 text-[11px] font-medium text-danger">
+                          {unreadCount} moi
+                        </span>
+                      )}
+                    </div>
+                    <div className="max-h-80 overflow-y-auto">
+                      {notifications.length === 0 ? (
+                        <div className="px-4 py-8 text-center text-sm text-text-muted">
+                          Chua co thong bao nao.
+                        </div>
+                      ) : (
+                        notifications.map((notification) => (
+                          <Link
+                            key={notification.id}
+                            href={notification.href || '#'}
+                            className={cn(
+                              'block border-b border-border-subtle px-4 py-3 transition-colors last:border-b-0 hover:bg-surface-hover',
+                              !notification.read && 'bg-accent/6',
+                            )}
+                          >
+                            <p className="text-sm font-medium text-text-primary">
+                              {notification.title}
+                            </p>
+                            {notification.message && (
+                              <p className="mt-1 text-xs text-text-muted">
+                                {notification.message}
+                              </p>
+                            )}
+                          </Link>
+                        ))
+                      )}
+                    </div>
+                  </motion.div>
+                </>
+              )}
             </AnimatePresence>
-        </header>
-    );
+          </div>
+
+          <div className="relative">
+            <button
+              onClick={() => {
+                setShowUserMenu((current) => !current);
+                setShowNotifications(false);
+              }}
+              className="flex items-center gap-2 rounded-[var(--radius-md)] px-2 py-1.5 transition-colors hover:bg-surface-hover"
+            >
+              <Avatar name={userName} size="sm" />
+              <div className="hidden text-left sm:block">
+                <p className="text-xs font-medium text-text-primary">{userName}</p>
+                <p className="text-[11px] text-text-muted">{roleLabels[userRole] || userRole}</p>
+              </div>
+              <ChevronDown className="hidden h-3.5 w-3.5 text-text-muted sm:block" />
+            </button>
+
+            <AnimatePresence>
+              {showUserMenu && (
+                <>
+                  <button
+                    type="button"
+                    className="fixed inset-0 z-40"
+                    onClick={() => setShowUserMenu(false)}
+                  />
+                  <motion.div
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 8 }}
+                    transition={{ duration: 0.18 }}
+                    className="surface-panel absolute right-0 top-[calc(100%+0.75rem)] z-50 w-52 rounded-[var(--radius-lg)] p-1"
+                  >
+                    <Link
+                      href="/profile"
+                      className="flex items-center gap-2.5 rounded-[var(--radius-md)] px-3 py-2 text-sm text-text-secondary transition-colors hover:bg-surface-hover hover:text-text-primary"
+                    >
+                      <User className="h-4 w-4" />
+                      Ho so
+                    </Link>
+                    <Link
+                      href={settingsHref}
+                      className="flex items-center gap-2.5 rounded-[var(--radius-md)] px-3 py-2 text-sm text-text-secondary transition-colors hover:bg-surface-hover hover:text-text-primary"
+                    >
+                      <Settings className="h-4 w-4" />
+                      Cai dat
+                    </Link>
+                    <button
+                      onClick={() => void onLogout()}
+                      className="flex w-full items-center gap-2.5 rounded-[var(--radius-md)] px-3 py-2 text-sm text-danger transition-colors hover:bg-danger/8"
+                    >
+                      <LogOut className="h-4 w-4" />
+                      Dang xuat
+                    </button>
+                  </motion.div>
+                </>
+              )}
+            </AnimatePresence>
+          </div>
+        </div>
+      </header>
+
+      <AnimatePresence>
+        {showSearch && (
+          <motion.div
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.18 }}
+            className="surface-panel mt-3 rounded-[var(--radius-xl)] p-3"
+          >
+            <SearchInput
+              autoFocus
+              placeholder="Tim kiem..."
+              onKeyDown={(event) => {
+                if (event.key === 'Escape') {
+                  setShowSearch(false);
+                }
+              }}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
 }
 
 export default Topbar;

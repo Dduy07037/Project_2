@@ -4,22 +4,18 @@ import { useEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { ShieldAlert, ShieldCheck } from 'lucide-react';
 import { useAuth } from '@/components/providers/auth-provider';
-import { FullscreenState } from '@/components/ui/page-state';
 import { consumeLogoutStripLoginNext } from '@/lib/auth/routing';
-import type { AppRole } from '@/lib/auth/types';
+import { FullscreenState } from '@/components/ui/page-state';
 import { AppShell } from './app-shell';
 
-interface ProtectedRoleShellProps {
-  role: AppRole;
+interface AuthenticatedShellProps {
   children: React.ReactNode;
 }
 
-export function ProtectedRoleShell({ role, children }: ProtectedRoleShellProps) {
+export function AuthenticatedShell({ children }: AuthenticatedShellProps) {
   const router = useRouter();
   const pathname = usePathname();
   const { status, user, logout } = useAuth();
-  const isFocusRoute =
-    pathname?.startsWith('/student/exams/') && pathname.endsWith('/take');
 
   useEffect(() => {
     if (status === 'loading') {
@@ -27,10 +23,6 @@ export function ProtectedRoleShell({ role, children }: ProtectedRoleShellProps) 
     }
 
     if (status === 'unauthenticated') {
-      if (pathname?.startsWith('/login')) {
-        return;
-      }
-
       if (consumeLogoutStripLoginNext()) {
         router.replace('/login');
         return;
@@ -38,13 +30,8 @@ export function ProtectedRoleShell({ role, children }: ProtectedRoleShellProps) 
 
       const nextPath = pathname && pathname !== '/' ? `?next=${encodeURIComponent(pathname)}` : '';
       router.replace(`/login${nextPath}`);
-      return;
     }
-
-    if (status === 'authenticated' && user && user.role !== role) {
-      router.replace('/403');
-    }
-  }, [pathname, role, router, status, user]);
+  }, [pathname, router, status]);
 
   if (status === 'loading') {
     return (
@@ -63,25 +50,11 @@ export function ProtectedRoleShell({ role, children }: ProtectedRoleShellProps) 
   if (!user) {
     return (
       <FullscreenState
-        icon={<ShieldCheck className="h-10 w-10" />}
-        title="Dang xac thuc phien lam viec"
-        description="ExamGuard dang tai thong tin tai khoan."
-      />
-    );
-  }
-
-  if (user.role !== role) {
-    return (
-      <FullscreenState
         icon={<ShieldAlert className="h-10 w-10" />}
-        title="Dang chuyen huong"
-        description="Ban khong co quyen truy cap khu vuc nay."
+        title="Khong tim thay tai khoan"
+        description="Phien lam viec hien tai khong con hop le."
       />
     );
-  }
-
-  if (isFocusRoute) {
-    return <>{children}</>;
   }
 
   return (

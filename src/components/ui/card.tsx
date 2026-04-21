@@ -1,137 +1,160 @@
 'use client';
 
-import { cn } from '@/lib/cn';
 import { motion } from 'framer-motion';
-import type { ReactNode } from 'react';
-import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import { Minus, TrendingDown, TrendingUp } from 'lucide-react';
+import type { CSSProperties, ReactNode } from 'react';
+import { cn } from '@/lib/cn';
+import { cardHover } from '@/lib/motion';
 
-// ─── Card (Glassmorphism) ───
 interface CardProps {
-    children: ReactNode;
-    className?: string;
-    hover?: boolean;
-    padding?: 'none' | 'sm' | 'md' | 'lg';
-    onClick?: () => void;
-    premium?: boolean;
+  children: ReactNode;
+  className?: string;
+  hover?: boolean;
+  padding?: 'none' | 'sm' | 'md' | 'lg';
+  onClick?: () => void;
+  premium?: boolean;
+  style?: CSSProperties;
 }
 
-export function Card({ children, className, hover = false, padding = 'md', onClick, premium = false }: CardProps) {
-    const paddings = { none: '', sm: 'p-3', md: 'p-5', lg: 'p-7' };
+export function Card({
+  children,
+  className,
+  hover = false,
+  padding = 'md',
+  onClick,
+  premium = false,
+  style,
+}: CardProps) {
+  const paddings = { none: '', sm: 'p-4', md: 'p-5', lg: 'p-6' };
 
-    const baseClassName = cn(
-        'rounded-[var(--radius-xl)] transition-all duration-300 ease-out',
-        premium
-            ? 'card-premium'
-            : 'glass-card',
-        hover && 'cursor-pointer hover:border-border-hover',
-        onClick && 'cursor-pointer',
-        paddings[padding],
-        className
-    );
+  const baseClassName = cn(
+    premium ? 'surface-panel' : 'surface-card',
+    'rounded-[var(--radius-lg)]',
+    'transition-[border-color,box-shadow,transform] duration-[var(--duration-normal)] ease-[var(--ease-smooth)]',
+    hover && 'cursor-pointer hover:border-border-hover hover:shadow-md',
+    onClick && 'cursor-pointer',
+    paddings[padding],
+    className,
+  );
 
-    if (hover) {
-        return (
-            <motion.div
-                className={baseClassName}
-                whileHover={{
-                    y: -4,
-                    scale: 1.01,
-                    transition: { duration: 0.25, ease: 'easeOut' },
-                }}
-                onClick={onClick}
-            >
-                {children}
-            </motion.div>
-        );
-    }
-
+  if (hover) {
     return (
-        <div className={baseClassName} onClick={onClick}>
-            {children}
-        </div>
+      <motion.div className={baseClassName} whileHover={cardHover} onClick={onClick} style={style}>
+        {children}
+      </motion.div>
     );
+  }
+
+  return (
+    <div className={baseClassName} onClick={onClick} style={style}>
+      {children}
+    </div>
+  );
 }
 
-// ─── Stat Card (with glow accent bar) ───
 interface StatCardProps {
-    label: string;
-    value: string | number;
-    change?: number;
-    changeLabel?: string;
-    icon?: ReactNode;
-    className?: string;
-    accentColor?: string;
+  label: string;
+  value: string | number;
+  change?: number;
+  changeLabel?: string;
+  icon?: ReactNode;
+  className?: string;
+  accentColor?: string;
 }
 
-export function StatCard({ label, value, change, changeLabel, icon, className, accentColor }: StatCardProps) {
-    return (
-        <Card className={cn('relative overflow-hidden group', className)} hover>
-            {/* Ambient glow on top */}
-            {accentColor && (
-                <div
-                    className="absolute -top-4 left-1/2 -translate-x-1/2 w-32 h-8 rounded-full blur-2xl opacity-30 group-hover:opacity-50 transition-opacity duration-500"
-                    style={{ background: accentColor }}
-                />
-            )}
-            {/* Accent bar */}
-            {accentColor && (
-                <div className="absolute top-0 left-4 right-4 h-[2px] rounded-full" style={{ background: `linear-gradient(90deg, transparent, ${accentColor}, transparent)` }} />
-            )}
-            <div className="flex items-start justify-between relative z-10">
-                <div className="flex flex-col gap-1.5">
-                    <span className="text-[11px] font-semibold text-text-muted uppercase tracking-widest">{label}</span>
-                    <span className="text-3xl font-bold text-text-primary tracking-tighter">{value}</span>
-                    {change !== undefined && (
-                        <div className="flex items-center gap-1 mt-0.5">
-                            {change > 0 ? (
-                                <TrendingUp className="h-3 w-3 text-success" />
-                            ) : change < 0 ? (
-                                <TrendingDown className="h-3 w-3 text-danger" />
-                            ) : (
-                                <Minus className="h-3 w-3 text-text-muted" />
-                            )}
-                            <span className={cn(
-                                'text-xs font-semibold',
-                                change > 0 ? 'text-success' : change < 0 ? 'text-danger' : 'text-text-muted'
-                            )}>
-                                {change > 0 ? '+' : ''}{change}%
-                                {changeLabel && <span className="text-text-muted ml-1 font-normal">{changeLabel}</span>}
-                            </span>
-                        </div>
-                    )}
-                </div>
-                {icon && (
-                    <div className="w-11 h-11 rounded-[var(--radius-md)] bg-surface-glass flex items-center justify-center text-text-muted group-hover:text-accent-light transition-colors duration-300 border border-border-glass">
-                        {icon}
-                    </div>
+export function StatCard({
+  label,
+  value,
+  change,
+  changeLabel,
+  icon,
+  className,
+  accentColor,
+}: StatCardProps) {
+  const accentStyle = accentColor
+    ? {
+        borderLeftColor: `color-mix(in srgb, ${accentColor} 24%, white)`,
+      }
+    : undefined;
+
+  const iconStyle = accentColor
+    ? {
+        backgroundColor: `color-mix(in srgb, ${accentColor} 10%, white)`,
+        borderColor: `color-mix(in srgb, ${accentColor} 18%, white)`,
+        color: accentColor,
+      }
+    : undefined;
+
+  return (
+    <Card
+      hover
+      className={cn('border-l-[3px] border-l-transparent min-h-[152px]', className)}
+      style={accentStyle}
+    >
+      <div className="flex h-full items-start justify-between gap-4">
+        <div className="flex flex-col gap-3">
+          <span className="text-[11px] font-medium text-text-muted">{label}</span>
+          <span className="text-[28px] font-semibold leading-none tracking-[-0.03em] text-text-primary">
+            {value}
+          </span>
+          {change !== undefined && (
+            <div className="flex items-center gap-1.5 text-xs">
+              {change > 0 ? (
+                <TrendingUp className="h-3.5 w-3.5 text-success" />
+              ) : change < 0 ? (
+                <TrendingDown className="h-3.5 w-3.5 text-danger" />
+              ) : (
+                <Minus className="h-3.5 w-3.5 text-text-muted" />
+              )}
+              <span
+                className={cn(
+                  'font-medium',
+                  change > 0 && 'text-success',
+                  change < 0 && 'text-danger',
+                  change === 0 && 'text-text-secondary',
                 )}
+              >
+                {change > 0 ? '+' : ''}
+                {change}%
+              </span>
+              {changeLabel && <span className="text-text-muted">{changeLabel}</span>}
             </div>
-        </Card>
-    );
+          )}
+        </div>
+        {icon && (
+          <div
+            className="flex h-11 w-11 items-center justify-center rounded-[var(--radius-md)] border border-border-subtle bg-bg-tertiary text-text-secondary"
+            style={iconStyle}
+          >
+            {icon}
+          </div>
+        )}
+      </div>
+    </Card>
+  );
 }
 
-// ─── Panel (Glass Section) ───
 interface PanelProps {
-    title?: string;
-    description?: string;
-    action?: ReactNode;
-    children: ReactNode;
-    className?: string;
+  title?: string;
+  description?: string;
+  action?: ReactNode;
+  children: ReactNode;
+  className?: string;
 }
 
 export function Panel({ title, description, action, children, className }: PanelProps) {
-    return (
-        <Card padding="none" className={cn('flex flex-col', className)}>
-            {(title || action) && (
-                <div className="flex items-center justify-between px-6 py-4 border-b border-border-glass">
-                    <div>
-                        {title && <h3 className="text-sm font-bold text-text-primary tracking-tight">{title}</h3>}
-                        {description && <p className="text-xs text-text-muted mt-0.5">{description}</p>}
-                    </div>
-                    {action}
-                </div>
-            )}
-            <div className="p-6">{children}</div>
-        </Card>
-    );
+  return (
+    <Card padding="none" className={cn('overflow-hidden', className)}>
+      {(title || action) && (
+        <div className="flex flex-col gap-3 border-b border-border-subtle px-5 py-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="space-y-1">
+            {title && <h3 className="text-base font-semibold text-text-primary">{title}</h3>}
+            {description && <p className="text-sm text-text-muted">{description}</p>}
+          </div>
+          {action && <div className="shrink-0">{action}</div>}
+        </div>
+      )}
+      <div className="p-5">{children}</div>
+    </Card>
+  );
 }

@@ -2,31 +2,41 @@
 
 import Link from 'next/link';
 import { motion } from 'framer-motion';
+import { ArrowLeft, Home, ShieldOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { ShieldOff, ArrowLeft, Home } from 'lucide-react';
 import { pageVariants } from '@/lib/motion';
 
 export default function Page403() {
-    return (
-        <div className="min-h-screen bg-bg-primary flex items-center justify-center p-6">
-            <motion.div variants={pageVariants} initial="initial" animate="enter" className="text-center max-w-md">
-                <div className="w-20 h-20 rounded-full bg-danger/10 flex items-center justify-center mx-auto mb-6">
-                    <ShieldOff className="h-9 w-9 text-danger" />
-                </div>
-                <h1 className="text-6xl font-bold text-text-primary mb-2 tracking-tight">403</h1>
-                <h2 className="text-lg font-semibold text-text-secondary mb-3">Truy cập bị từ chối</h2>
-                <p className="text-sm text-text-muted mb-8">
-                    Bạn không có quyền truy cập trang này. Vui lòng liên hệ quản trị viên nếu bạn cho rằng đây là lỗi.
-                </p>
-                <div className="flex items-center justify-center gap-3">
-                    <Link href="/login">
-                        <Button variant="secondary" icon={<ArrowLeft className="h-4 w-4" />}>Đăng nhập lại</Button>
-                    </Link>
-                    <Link href="/">
-                        <Button icon={<Home className="h-4 w-4" />}>Trang chủ</Button>
-                    </Link>
-                </div>
-            </motion.div>
-        </div>
-    );
+  return (
+    <div className="min-h-screen px-4 py-6 sm:px-6 lg:px-10">
+      <div className="mx-auto flex min-h-[calc(100vh-3rem)] max-w-[640px] items-center justify-center">
+        <motion.div
+          variants={pageVariants}
+          initial="initial"
+          animate="enter"
+          className="surface-card w-full rounded-[28px] p-8 text-center"
+        >
+          <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-danger/8 text-danger">
+            <ShieldOff className="h-8 w-8" />
+          </div>
+          <h1 className="text-[56px] font-semibold tracking-[-0.06em] text-text-primary">403</h1>
+          <h2 className="mt-2 text-xl font-semibold text-text-primary">Truy cap bi tu choi</h2>
+          <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-text-muted">
+            Ban khong co quyen truy cap trang nay. Neu day la nham lan, vui long lien he
+            quan tri vien de kiem tra phan quyen.
+          </p>
+          <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
+            <Link href="/login">
+              <Button variant="secondary" icon={<ArrowLeft className="h-4 w-4" />}>
+                Dang nhap lai
+              </Button>
+            </Link>
+            <Link href="/">
+              <Button icon={<Home className="h-4 w-4" />}>Trang chu</Button>
+            </Link>
+          </div>
+        </motion.div>
+      </div>
+    </div>
+  );
 }

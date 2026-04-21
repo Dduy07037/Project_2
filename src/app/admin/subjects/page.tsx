@@ -83,10 +83,13 @@ export default function AdminSubjectsPage() {
         );
     }, [search, subjects]);
 
-    const lecturerOptions = useMemo(() => ([
-        { value: '', label: 'Gan cho tai khoan admin hien tai' },
-        ...lecturers.map((lecturer) => ({ value: lecturer.id, label: lecturer.fullName })),
-    ]), [lecturers]);
+    const lecturerOptions = useMemo(
+        () => [
+            { value: '', label: 'Gan cho tai khoan admin hien tai' },
+            ...lecturers.map((lecturer) => ({ value: lecturer.id, label: lecturer.fullName })),
+        ],
+        [lecturers],
+    );
 
     const handleCreateSubject = useCallback(async () => {
         if (!createForm.code?.trim() || !createForm.name?.trim()) {
@@ -123,7 +126,11 @@ export default function AdminSubjectsPage() {
         {
             key: 'code',
             title: 'Ma mon',
-            render: (subject: SubjectDto) => <span className="text-sm font-mono font-medium text-accent">{subject.code}</span>,
+            render: (subject: SubjectDto) => (
+                <span className="inline-flex rounded-full border border-border-subtle bg-bg-tertiary px-2 py-1 text-[11px] font-semibold tracking-[0.08em] text-text-secondary">
+                    {subject.code}
+                </span>
+            ),
         },
         {
             key: 'name',

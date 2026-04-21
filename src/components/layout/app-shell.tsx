@@ -1,62 +1,62 @@
 'use client';
 
-import { useState, type ReactNode } from 'react';
+import { useState, type CSSProperties, type ReactNode } from 'react';
 import { motion } from 'framer-motion';
-import { cn } from '@/lib/cn';
+import { pageVariants } from '@/lib/motion';
 import { Sidebar } from './sidebar';
 import { Topbar } from './topbar';
-import { pageVariants } from '@/lib/motion';
 
 interface AppShellProps {
-    children: ReactNode;
-    role: 'admin' | 'lecturer' | 'student';
-    userName: string;
-    onLogout: () => Promise<void>;
+  children: ReactNode;
+  role: 'admin' | 'lecturer' | 'student';
+  userName: string;
+  onLogout: () => Promise<void>;
 }
 
 export function AppShell({ children, role, userName, onLogout }: AppShellProps) {
-    const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const sidebarWidth = sidebarCollapsed ? 88 : 272;
 
-    return (
-        <div className="min-h-screen relative">
-            <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
-                <div className="ambient-orb ambient-orb-purple w-[500px] h-[500px] -top-48 -left-32 opacity-25" />
-                <div className="ambient-orb ambient-orb-cyan w-[400px] h-[400px] top-1/2 -right-48 opacity-15" style={{ animationDelay: '3s' }} />
-                <div className="ambient-orb ambient-orb-emerald w-[300px] h-[300px] bottom-0 left-1/3 opacity-10" style={{ animationDelay: '5s' }} />
-            </div>
+  return (
+    <div
+      className="min-h-screen"
+      style={
+        {
+          '--shell-sidebar-width': `${sidebarWidth}px`,
+        } as CSSProperties
+      }
+    >
+      <Sidebar
+        role={role}
+        userName={userName}
+        collapsed={sidebarCollapsed}
+        onToggle={() => setSidebarCollapsed((current) => !current)}
+        mobileOpen={mobileNavOpen}
+        onCloseMobile={() => setMobileNavOpen(false)}
+      />
 
-            <Sidebar
-                role={role}
-                userName={userName}
-                collapsed={sidebarCollapsed}
-                onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
-            />
+      <main className="relative lg:pl-[calc(var(--shell-sidebar-width)+1.5rem)]">
+        <div className="mx-auto flex min-h-screen max-w-[1440px] flex-col px-4 pb-8 pt-4 sm:px-5 lg:px-8">
+          <Topbar
+            userName={userName}
+            userRole={role}
+            onLogout={onLogout}
+            onOpenSidebar={() => setMobileNavOpen(true)}
+          />
 
-            <Topbar
-                userName={userName}
-                userRole={role}
-                sidebarCollapsed={sidebarCollapsed}
-                onLogout={onLogout}
-            />
-
-            <main
-                className={cn(
-                    'pt-[80px] min-h-screen relative z-10',
-                    'transition-[margin-left] duration-400 ease-[var(--ease-out-expo)]'
-                )}
-                style={{ marginLeft: sidebarCollapsed ? 72 + 12 : 260 + 12 }}
-            >
-                <motion.div
-                    variants={pageVariants}
-                    initial="initial"
-                    animate="enter"
-                    className="p-6"
-                >
-                    {children}
-                </motion.div>
-            </main>
+          <motion.div
+            variants={pageVariants}
+            initial="initial"
+            animate="enter"
+            className="flex-1 pt-4"
+          >
+            {children}
+          </motion.div>
         </div>
-    );
+      </main>
+    </div>
+  );
 }
 
 export default AppShell;

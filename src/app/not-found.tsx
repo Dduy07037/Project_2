@@ -2,28 +2,36 @@
 
 import Link from 'next/link';
 import { motion } from 'framer-motion';
+import { Home, SearchX } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { SearchX, Home } from 'lucide-react';
 import { pageVariants } from '@/lib/motion';
 
 export default function NotFound() {
-    return (
-        <div className="min-h-screen bg-bg-primary flex items-center justify-center p-6">
-            <motion.div variants={pageVariants} initial="initial" animate="enter" className="text-center max-w-md">
-                <div className="w-20 h-20 rounded-full bg-accent/10 flex items-center justify-center mx-auto mb-6">
-                    <SearchX className="h-9 w-9 text-accent" />
-                </div>
-                <h1 className="text-6xl font-bold text-text-primary mb-2 tracking-tight">404</h1>
-                <h2 className="text-lg font-semibold text-text-secondary mb-3">Không tìm thấy trang</h2>
-                <p className="text-sm text-text-muted mb-8">
-                    Trang bạn tìm kiếm không tồn tại hoặc đã bị di chuyển.
-                </p>
-                <div className="flex items-center justify-center gap-3">
-                    <Link href="/">
-                        <Button icon={<Home className="h-4 w-4" />}>Trang chủ</Button>
-                    </Link>
-                </div>
-            </motion.div>
-        </div>
-    );
+  return (
+    <div className="min-h-screen px-4 py-6 sm:px-6 lg:px-10">
+      <div className="mx-auto flex min-h-[calc(100vh-3rem)] max-w-[640px] items-center justify-center">
+        <motion.div
+          variants={pageVariants}
+          initial="initial"
+          animate="enter"
+          className="surface-card w-full rounded-[28px] p-8 text-center"
+        >
+          <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-info/8 text-info">
+            <SearchX className="h-8 w-8" />
+          </div>
+          <h1 className="text-[56px] font-semibold tracking-[-0.06em] text-text-primary">404</h1>
+          <h2 className="mt-2 text-xl font-semibold text-text-primary">Khong tim thay trang</h2>
+          <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-text-muted">
+            Trang ban tim kiem khong ton tai hoac da duoc di chuyen. Hay quay lai dashboard
+            de tiep tuc thao tac.
+          </p>
+          <div className="mt-8 flex justify-center">
+            <Link href="/">
+              <Button icon={<Home className="h-4 w-4" />}>Trang chu</Button>
+            </Link>
+          </div>
+        </motion.div>
+      </div>
+    </div>
+  );
 }

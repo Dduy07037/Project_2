@@ -14,8 +14,9 @@ import {
 } from '@/components/ui';
 import { useAuth } from '@/components/providers/auth-provider';
 import { getMonitoringAttempts, toStatusKey, type MonitoringAttemptDto } from '@/lib/api/exam-guard';
-import { formatDateTime, formatTime } from '@/lib/utils';
+import { cn } from '@/lib/cn';
 import { staggerContainer, staggerItem } from '@/lib/motion';
+import { formatDateTime, formatTime } from '@/lib/utils';
 import { AlertCircle, AlertTriangle, Clock, Flag, Monitor, RefreshCw, Shield } from 'lucide-react';
 
 export default function MonitoringPage() {
@@ -74,11 +75,11 @@ export default function MonitoringPage() {
             <motion.div variants={staggerItem}>
                 <PageHeader
                     title="Monitoring va hau kiem"
-                    description="Du lieu nay den truc tiep tu /api/attempts/monitoring."
+                    description="Danh sach bai lam can xac minh, doi chieu su kien va theo doi trang thai nop bai."
                 />
             </motion.div>
 
-            <motion.div variants={staggerItem} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <motion.div variants={staggerItem} className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 <StatCard label="Tong luot thi" value={attempts.length} icon={<Monitor className="h-5 w-5" />} />
                 <StatCard label="Can xem xet" value={flaggedAttempts.length} icon={<Flag className="h-5 w-5" />} accentColor="var(--color-warning)" />
                 <StatCard
@@ -91,7 +92,7 @@ export default function MonitoringPage() {
                     label="Auto submit"
                     value={attempts.filter((item) => toStatusKey(item.attempt.status) === 'auto_submitted').length}
                     icon={<Clock className="h-5 w-5" />}
-                    accentColor="var(--color-info)"
+                    accentColor="var(--color-accent)"
                 />
             </motion.div>
 
@@ -122,22 +123,25 @@ export default function MonitoringPage() {
                 ) : filteredAttempts.map((item) => (
                     <div
                         key={item.attempt.id}
-                        className={`glass-card rounded-[var(--radius-xl)] p-5 border-l-2 ${item.attempt.isFlagged ? 'border-l-warning' : 'border-l-border'}`}
+                        className={cn(
+                            'surface-card rounded-[var(--radius-xl)] border-l-[3px] p-5',
+                            item.attempt.isFlagged ? 'border-l-warning' : 'border-l-border',
+                        )}
                     >
                         <div className="flex items-start gap-4">
-                            <div className="w-12 h-12 rounded-[var(--radius-md)] bg-accent/10 flex items-center justify-center shrink-0">
-                                <Shield className="h-5 w-5 text-accent-light" />
+                            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[var(--radius-md)] border border-border-subtle bg-bg-tertiary text-text-secondary">
+                                <Shield className="h-5 w-5" />
                             </div>
-                            <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2 flex-wrap">
+                            <div className="min-w-0 flex-1">
+                                <div className="flex flex-wrap items-center gap-2">
                                     <span className="text-sm font-semibold text-text-primary">{item.attempt.studentName}</span>
-                                    <span className="text-xs text-text-muted font-mono">{item.attempt.studentCode || 'Khong co MSSV'}</span>
+                                    <span className="font-mono text-xs text-text-muted">{item.attempt.studentCode || 'Khong co MSSV'}</span>
                                     <StatusBadge status={toStatusKey(item.attempt.status)} />
                                 </div>
-                                <p className="text-xs text-text-muted mt-0.5">{item.attempt.examTitle}</p>
-                                <div className="flex flex-wrap gap-x-5 gap-y-1 mt-3 text-xs">
+                                <p className="mt-0.5 text-xs text-text-muted">{item.attempt.examTitle}</p>
+                                <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-xs">
                                     <span className="text-text-secondary">
-                                        Thoi gian: <span className="text-text-primary">{item.attempt.timeSpentSeconds ? formatTime(item.attempt.timeSpentSeconds) : '—'}</span>
+                                        Thoi gian: <span className="text-text-primary">{item.attempt.timeSpentSeconds ? formatTime(item.attempt.timeSpentSeconds) : '-'}</span>
                                     </span>
                                     <span className="text-text-secondary">
                                         Tab: <span className={item.attempt.tabSwitchCount > 0 ? 'text-warning' : 'text-text-primary'}>{item.attempt.tabSwitchCount}</span>
@@ -146,21 +150,21 @@ export default function MonitoringPage() {
                                         Reload: <span className={item.attempt.reloadCount > 0 ? 'text-warning' : 'text-text-primary'}>{item.attempt.reloadCount}</span>
                                     </span>
                                     <span className="text-text-secondary">
-                                        Diem: <span className="text-text-primary">{item.attempt.score ?? '—'}</span>
+                                        Diem: <span className="text-text-primary">{item.attempt.score ?? '-'}</span>
                                     </span>
                                 </div>
-                                <div className="flex flex-wrap gap-2 mt-2">
+                                <div className="mt-2 flex flex-wrap gap-2">
                                     {item.attempt.flagReason && <Badge variant="warning">{item.attempt.flagReason}</Badge>}
                                     {!item.attempt.flagReason && item.attempt.tabSwitchCount > 0 && (
                                         <Badge variant="warning">{item.attempt.tabSwitchCount} tab switch</Badge>
                                     )}
                                 </div>
-                                <div className="mt-3 pl-3 border-l border-border space-y-1.5">
+                                <div className="mt-3 space-y-1.5 border-l border-border pl-3">
                                     {item.recentEvents.length === 0 ? (
                                         <span className="text-[11px] text-text-muted">Chua co event log chi tiet.</span>
                                     ) : item.recentEvents.map((event) => (
                                         <div key={event.id} className="flex items-center gap-3 text-[11px]">
-                                            <span className="text-text-muted min-w-[120px]">{formatDateTime(event.timestamp)}</span>
+                                            <span className="min-w-[120px] text-text-muted">{formatDateTime(event.timestamp)}</span>
                                             <StatusBadge status={toStatusKey(event.eventType)} />
                                             <span className="text-text-secondary">{event.details || event.eventType}</span>
                                         </div>

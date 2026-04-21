@@ -12,8 +12,8 @@ import {
 } from '@/components/ui';
 import { useAuth } from '@/components/providers/auth-provider';
 import { getAvailableSessions, toStatusKey, type AvailableSessionDto } from '@/lib/api/exam-guard';
-import { formatDateTime, formatDuration } from '@/lib/utils';
 import { staggerContainer, staggerItem } from '@/lib/motion';
+import { formatDateTime, formatDuration } from '@/lib/utils';
 import { AlertCircle, ArrowRight, Calendar, Clock, Eye, EyeOff, GraduationCap, Lock, RefreshCw, Shuffle } from 'lucide-react';
 
 export default function StudentExamsPage() {
@@ -41,12 +41,15 @@ export default function StudentExamsPage() {
         void loadSessions();
     }, [loadSessions]);
 
-    const groupedSessions = useMemo(() => sessions.sort((left, right) => new Date(left.startTime).getTime() - new Date(right.startTime).getTime()), [sessions]);
+    const groupedSessions = useMemo(
+        () => [...sessions].sort((left, right) => new Date(left.startTime).getTime() - new Date(right.startTime).getTime()),
+        [sessions],
+    );
 
     return (
         <motion.div variants={staggerContainer} initial="initial" animate="enter" className="space-y-6">
             <motion.div variants={staggerItem}>
-                <PageHeader title="Ca thi kha dung" description="Danh sach du lieu thuc tu GET /api/exams/available." />
+                <PageHeader title="Ca thi kha dung" description="Danh sach session duoc mo cho sinh vien, bao gom ca thi sap dien ra va ca thi dang mo." />
             </motion.div>
 
             <motion.div variants={staggerItem} className="grid gap-4">
@@ -73,18 +76,18 @@ export default function StudentExamsPage() {
                     return (
                         <Card key={session.sessionId} hover>
                             <div className="flex items-start gap-5">
-                                <div className="w-14 h-14 rounded-[var(--radius-lg)] bg-accent/10 flex items-center justify-center shrink-0">
-                                    <GraduationCap className="h-6 w-6 text-accent" />
+                                <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-[var(--radius-lg)] border border-border-subtle bg-bg-tertiary text-text-secondary">
+                                    <GraduationCap className="h-6 w-6" />
                                 </div>
-                                <div className="flex-1 min-w-0">
-                                    <div className="flex items-center gap-2 mb-1 flex-wrap">
+                                <div className="min-w-0 flex-1">
+                                    <div className="mb-1 flex flex-wrap items-center gap-2">
                                         <h3 className="text-base font-semibold text-text-primary">{session.examTitle}</h3>
                                         <StatusBadge status={statusKey} />
                                         {session.hasExistingAttempt && session.attemptStatus && (
                                             <StatusBadge status={toStatusKey(session.attemptStatus)} />
                                         )}
                                     </div>
-                                    <p className="text-sm text-text-muted mb-3">{session.examDescription || session.subjectName}</p>
+                                    <p className="mb-3 text-sm text-text-muted">{session.examDescription || session.subjectName}</p>
                                     <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-text-secondary">
                                         <span className="flex items-center gap-1"><Clock className="h-3.5 w-3.5" /> {formatDuration(session.durationMinutes)}</span>
                                         <span className="flex items-center gap-1"><Shuffle className="h-3.5 w-3.5" /> {session.shuffleQuestions ? 'Tron cau hoi' : 'Thu tu co dinh'}</span>
@@ -96,12 +99,12 @@ export default function StudentExamsPage() {
                                             <span className="flex items-center gap-1"><Lock className="h-3.5 w-3.5" /> Co mat khau</span>
                                         )}
                                     </div>
-                                    <div className="mt-3 p-3 bg-bg-tertiary rounded-[var(--radius-md)] flex items-center justify-between gap-4">
+                                    <div className="mt-3 flex items-center justify-between gap-4 rounded-[var(--radius-md)] border border-border-subtle bg-bg-tertiary p-3">
                                         <div>
                                             <p className="text-xs font-medium text-text-secondary">{session.sessionName}</p>
-                                            <p className="text-xs text-text-muted flex items-center gap-1 mt-0.5">
+                                            <p className="mt-0.5 flex items-center gap-1 text-xs text-text-muted">
                                                 <Calendar className="h-3 w-3" />
-                                                {formatDateTime(session.startTime)} — {formatDateTime(session.endTime)}
+                                                {formatDateTime(session.startTime)} - {formatDateTime(session.endTime)}
                                             </p>
                                         </div>
                                         {canStart ? (

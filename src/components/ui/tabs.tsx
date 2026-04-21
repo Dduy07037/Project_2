@@ -1,246 +1,489 @@
 'use client';
 
-import type { ReactNode } from 'react';
-import { motion } from 'framer-motion';
+import {
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type ReactNode,
+} from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
+import { Check, ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/cn';
+import { scaleFadeVariants } from '@/lib/motion';
 
-// ─── Tabs ───
 interface Tab {
-    id: string;
-    label: string;
-    icon?: ReactNode;
-    count?: number;
+  id: string;
+  label: string;
+  icon?: ReactNode;
+  count?: number;
 }
 
 interface TabsProps {
-    tabs: Tab[];
-    activeTab: string;
-    onChange: (tabId: string) => void;
-    className?: string;
-    variant?: 'default' | 'pills';
+  tabs: Tab[];
+  activeTab: string;
+  onChange: (tabId: string) => void;
+  className?: string;
+  variant?: 'default' | 'pills';
 }
 
-export function Tabs({ tabs, activeTab, onChange, className, variant = 'default' }: TabsProps) {
-    return (
-        <div
+export function Tabs({
+  tabs,
+  activeTab,
+  onChange,
+  className,
+  variant = 'default',
+}: TabsProps) {
+  return (
+    <div
+      className={cn(
+        'flex flex-wrap items-center gap-1',
+        variant === 'default' && 'border-b border-border-subtle pb-1',
+        variant === 'pills' && 'surface-card rounded-[var(--radius-lg)] p-1',
+        className,
+      )}
+    >
+      {tabs.map((tab) => {
+        const isActive = activeTab === tab.id;
+
+        return (
+          <button
+            key={tab.id}
+            onClick={() => onChange(tab.id)}
             className={cn(
-                'flex items-center gap-0.5',
-                variant === 'default' && 'border-b border-border',
-                variant === 'pills' && 'bg-bg-tertiary p-1 rounded-[var(--radius-md)]',
-                className
+              'relative inline-flex items-center gap-2 rounded-[var(--radius-md)] px-3 py-2 text-sm',
+              'transition-[background-color,color,border-color] duration-[var(--duration-normal)] ease-[var(--ease-smooth)]',
+              'focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-accent/12 cursor-pointer',
+              isActive ? 'text-text-primary' : 'text-text-muted hover:text-text-primary',
+              variant === 'default' && isActive && 'bg-bg-secondary',
+              variant === 'pills' &&
+                cn(
+                  'border border-transparent',
+                  isActive
+                    ? 'border-border bg-bg-secondary shadow-sm'
+                    : 'hover:bg-surface-hover',
+                ),
             )}
-        >
-            {tabs.map((tab) => (
-                <button
-                    key={tab.id}
-                    onClick={() => onChange(tab.id)}
-                    className={cn(
-                        'relative flex items-center gap-1.5 text-sm font-medium transition-colors cursor-pointer whitespace-nowrap',
-                        variant === 'default' && 'px-3 pb-2.5 pt-1',
-                        variant === 'pills' && 'px-3 py-1.5 rounded-[var(--radius-sm)]',
-                        activeTab === tab.id
-                            ? 'text-text-primary'
-                            : 'text-text-muted hover:text-text-secondary'
-                    )}
-                >
-                    {tab.icon}
-                    {tab.label}
-                    {tab.count !== undefined && (
-                        <span className={cn(
-                            'text-[11px] font-semibold min-w-[18px] h-[18px] inline-flex items-center justify-center rounded-full px-1',
-                            activeTab === tab.id ? 'bg-accent/15 text-accent' : 'bg-bg-tertiary text-text-muted'
-                        )}>
-                            {tab.count}
-                        </span>
-                    )}
-                    {variant === 'default' && activeTab === tab.id && (
-                        <motion.div
-                            layoutId="tab-indicator"
-                            className="absolute bottom-0 left-0 right-0 h-0.5 bg-accent rounded-full"
-                            transition={{ type: 'spring', stiffness: 300, damping: 25 }}
-                        />
-                    )}
-                    {variant === 'pills' && activeTab === tab.id && (
-                        <motion.div
-                            layoutId="pill-indicator"
-                            className="absolute inset-0 bg-bg-secondary border border-border rounded-[var(--radius-sm)] -z-10"
-                            transition={{ type: 'spring', stiffness: 300, damping: 25 }}
-                        />
-                    )}
-                </button>
-            ))}
-        </div>
-    );
+          >
+            {tab.icon}
+            <span>{tab.label}</span>
+            {tab.count !== undefined && (
+              <span
+                className={cn(
+                  'inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[11px] font-medium',
+                  isActive
+                    ? 'bg-accent/10 text-accent'
+                    : 'bg-bg-tertiary text-text-muted',
+                )}
+              >
+                {tab.count}
+              </span>
+            )}
+            {variant === 'default' && isActive && (
+              <motion.div
+                layoutId="tab-indicator"
+                className="absolute inset-x-2 -bottom-1.5 h-0.5 rounded-full bg-accent"
+                transition={{ type: 'spring', stiffness: 380, damping: 30 }}
+              />
+            )}
+          </button>
+        );
+      })}
+    </div>
+  );
 }
 
-// ─── Select ───
 interface SelectOption {
-    value: string;
-    label: string;
+  value: string;
+  label: string;
 }
 
 interface SelectProps {
-    label?: string;
-    options: SelectOption[];
-    value: string;
-    onChange: (value: string) => void;
-    placeholder?: string;
-    error?: string;
-    className?: string;
-    disabled?: boolean;
+  label?: string;
+  options: SelectOption[];
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+  error?: string;
+  className?: string;
+  disabled?: boolean;
 }
 
-export function Select({ label, options, value, onChange, placeholder, error, className, disabled }: SelectProps) {
-    return (
-        <div className="flex flex-col gap-1.5">
-            {label && <label className="text-sm font-medium text-text-secondary">{label}</label>}
-            <select
-                value={value}
-                onChange={(e) => onChange(e.target.value)}
-                disabled={disabled}
-                className={cn(
-                    'h-9 px-3 text-sm bg-bg-secondary border border-border rounded-[var(--radius-md)]',
-                    'text-text-primary appearance-none cursor-pointer',
-                    'transition-colors duration-[var(--duration-normal)]',
-                    'hover:border-border-hover',
-                    'focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/30',
-                    'disabled:opacity-50 disabled:cursor-not-allowed',
-                    error && 'border-danger',
-                    className
-                )}
+export function Select({
+  label,
+  options,
+  value,
+  onChange,
+  placeholder,
+  error,
+  className,
+  disabled,
+}: SelectProps) {
+  const reactId = useId();
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const listRef = useRef<HTMLDivElement | null>(null);
+  const [open, setOpen] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(0);
+
+  const normalizedOptions = useMemo(() => {
+    if (placeholder && !options.some((option) => option.value === '')) {
+      return [{ value: '', label: placeholder }, ...options];
+    }
+
+    return options;
+  }, [options, placeholder]);
+
+  const selectedIndex = Math.max(
+    normalizedOptions.findIndex((option) => option.value === value),
+    0,
+  );
+  const selectedOption = normalizedOptions[selectedIndex];
+
+  useEffect(() => {
+    setActiveIndex(selectedIndex);
+  }, [selectedIndex]);
+
+  useEffect(() => {
+    if (!open) return undefined;
+
+    function handlePointerDown(event: MouseEvent) {
+      if (!rootRef.current?.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    }
+
+    function handleEscape(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        setOpen(false);
+      }
+    }
+
+    document.addEventListener('mousedown', handlePointerDown);
+    document.addEventListener('keydown', handleEscape);
+
+    const frame = requestAnimationFrame(() => {
+      listRef.current?.focus();
+    });
+
+    return () => {
+      cancelAnimationFrame(frame);
+      document.removeEventListener('mousedown', handlePointerDown);
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [open]);
+
+  function selectIndex(index: number) {
+    const option = normalizedOptions[index];
+    if (!option) return;
+    onChange(option.value);
+    setOpen(false);
+  }
+
+  function handleTriggerKeyDown(event: ReactKeyboardEvent<HTMLButtonElement>) {
+    if (disabled) return;
+
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault();
+      setOpen(true);
+      setActiveIndex((current) => {
+        if (event.key === 'ArrowDown') {
+          return Math.min(current + 1, normalizedOptions.length - 1);
+        }
+        return Math.max(current - 1, 0);
+      });
+      return;
+    }
+
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      setOpen((current) => !current);
+    }
+  }
+
+  function handleListKeyDown(event: ReactKeyboardEvent<HTMLDivElement>) {
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      setActiveIndex((current) => Math.min(current + 1, normalizedOptions.length - 1));
+      return;
+    }
+
+    if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      setActiveIndex((current) => Math.max(current - 1, 0));
+      return;
+    }
+
+    if (event.key === 'Home') {
+      event.preventDefault();
+      setActiveIndex(0);
+      return;
+    }
+
+    if (event.key === 'End') {
+      event.preventDefault();
+      setActiveIndex(normalizedOptions.length - 1);
+      return;
+    }
+
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      selectIndex(activeIndex);
+    }
+  }
+
+  return (
+    <div className={cn('flex flex-col gap-2', className)} ref={rootRef}>
+      {label && <label className="text-sm font-medium text-text-primary">{label}</label>}
+      <div className="relative">
+        <button
+          type="button"
+          id={reactId}
+          aria-haspopup="listbox"
+          aria-expanded={open}
+          aria-controls={`${reactId}-listbox`}
+          disabled={disabled}
+          onClick={() => setOpen((current) => !current)}
+          onKeyDown={handleTriggerKeyDown}
+          className={cn(
+            'field-shell flex h-11 w-full items-center justify-between rounded-[var(--radius-md)] px-3.5 text-left text-sm',
+            'focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-accent/12',
+            disabled && 'cursor-not-allowed bg-bg-tertiary text-text-muted',
+            error && 'border-danger/50',
+          )}
+        >
+          <span className={cn(selectedOption ? 'text-text-primary' : 'text-text-muted')}>
+            {selectedOption?.label ?? placeholder ?? 'Chon'}
+          </span>
+          <ChevronDown
+            className={cn(
+              'h-4 w-4 text-text-muted transition-transform duration-[var(--duration-normal)]',
+              open && 'rotate-180',
+            )}
+          />
+        </button>
+        <AnimatePresence>
+          {open && !disabled && (
+            <motion.div
+              variants={scaleFadeVariants}
+              initial="initial"
+              animate="enter"
+              exit="exit"
+              className="surface-panel absolute left-0 right-0 top-[calc(100%+0.5rem)] z-[var(--z-dropdown)] overflow-hidden rounded-[var(--radius-lg)]"
             >
-                {placeholder && <option value="">{placeholder}</option>}
-                {options.map((opt) => (
-                    <option key={opt.value} value={opt.value}>{opt.label}</option>
-                ))}
-            </select>
-            {error && <p className="text-xs text-danger">{error}</p>}
-        </div>
-    );
+              <div
+                id={`${reactId}-listbox`}
+                ref={listRef}
+                role="listbox"
+                tabIndex={-1}
+                aria-labelledby={reactId}
+                onKeyDown={handleListKeyDown}
+                className="max-h-64 overflow-auto p-1 focus:outline-none"
+              >
+                {normalizedOptions.map((option, index) => {
+                  const isSelected = option.value === value;
+                  const isActive = index === activeIndex;
+
+                  return (
+                    <button
+                      key={`${option.value}-${option.label}`}
+                      type="button"
+                      role="option"
+                      aria-selected={isSelected}
+                      onMouseEnter={() => setActiveIndex(index)}
+                      onClick={() => selectIndex(index)}
+                      className={cn(
+                        'flex w-full items-center justify-between rounded-[var(--radius-md)] px-3 py-2 text-sm',
+                        'transition-colors duration-[var(--duration-normal)] cursor-pointer',
+                        isActive || isSelected
+                          ? 'bg-surface-hover text-text-primary'
+                          : 'text-text-secondary hover:bg-surface-hover',
+                      )}
+                    >
+                      <span>{option.label}</span>
+                      {isSelected && <Check className="h-4 w-4 text-accent" />}
+                    </button>
+                  );
+                })}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+      {error && <p className="text-xs font-medium text-danger">{error}</p>}
+    </div>
+  );
 }
 
-// ─── Checkbox ───
 interface CheckboxProps {
-    label?: string;
-    checked: boolean;
-    onChange: (checked: boolean) => void;
-    disabled?: boolean;
-    className?: string;
+  label?: string;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  disabled?: boolean;
+  className?: string;
 }
 
-export function Checkbox({ label, checked, onChange, disabled, className }: CheckboxProps) {
-    return (
-        <label className={cn('flex items-center gap-2 cursor-pointer select-none', disabled && 'opacity-50 cursor-not-allowed', className)}>
-            <div className="relative">
-                <input
-                    type="checkbox"
-                    checked={checked}
-                    onChange={(e) => onChange(e.target.checked)}
-                    disabled={disabled}
-                    className="sr-only peer"
-                />
-                <div className={cn(
-                    'w-4 h-4 border border-border rounded-[3px] transition-all duration-150',
-                    'peer-checked:bg-accent peer-checked:border-accent',
-                    'peer-focus-visible:ring-2 peer-focus-visible:ring-accent/30',
-                    !disabled && 'hover:border-border-hover'
-                )}>
-                    {checked && (
-                        <svg className="w-4 h-4 text-white" viewBox="0 0 16 16" fill="none">
-                            <path d="M4 8L7 11L12 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
-                    )}
-                </div>
-            </div>
-            {label && <span className="text-sm text-text-secondary">{label}</span>}
-        </label>
-    );
+export function Checkbox({
+  label,
+  checked,
+  onChange,
+  disabled,
+  className,
+}: CheckboxProps) {
+  return (
+    <label
+      className={cn(
+        'inline-flex items-center gap-2 text-sm text-text-secondary',
+        disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer',
+        className,
+      )}
+    >
+      <span
+        className={cn(
+          'relative flex h-4 w-4 items-center justify-center rounded-[4px] border',
+          checked ? 'border-accent bg-accent text-white' : 'border-border bg-bg-secondary',
+        )}
+      >
+        <input
+          type="checkbox"
+          checked={checked}
+          onChange={(event) => onChange(event.target.checked)}
+          disabled={disabled}
+          className="sr-only"
+        />
+        {checked && (
+          <svg className="h-3 w-3" viewBox="0 0 16 16" fill="none">
+            <path
+              d="M4 8L7 11L12 5"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        )}
+      </span>
+      {label && <span>{label}</span>}
+    </label>
+  );
 }
 
-// ─── Switch ───
 interface SwitchProps {
-    label?: string;
-    checked: boolean;
-    onChange: (checked: boolean) => void;
-    disabled?: boolean;
-    className?: string;
+  label?: string;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  disabled?: boolean;
+  className?: string;
 }
 
-export function Switch({ label, checked, onChange, disabled, className }: SwitchProps) {
-    return (
-        <label className={cn('flex items-center gap-2 cursor-pointer select-none', disabled && 'opacity-50 cursor-not-allowed', className)}>
-            <button
-                type="button"
-                role="switch"
-                aria-checked={checked}
-                onClick={() => !disabled && onChange(!checked)}
-                className={cn(
-                    'relative w-9 h-5 rounded-full transition-colors duration-200 cursor-pointer',
-                    checked ? 'bg-accent' : 'bg-bg-elevated'
-                )}
-            >
-                <motion.span
-                    className="absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow-sm"
-                    animate={{ x: checked ? 16 : 0 }}
-                    transition={{ type: 'spring', stiffness: 300, damping: 20 }}
-                />
-            </button>
-            {label && <span className="text-sm text-text-secondary">{label}</span>}
-        </label>
-    );
+export function Switch({
+  label,
+  checked,
+  onChange,
+  disabled,
+  className,
+}: SwitchProps) {
+  return (
+    <label
+      className={cn(
+        'inline-flex items-center gap-3 text-sm text-text-secondary',
+        disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer',
+        className,
+      )}
+    >
+      <button
+        type="button"
+        role="switch"
+        aria-checked={checked}
+        onClick={() => !disabled && onChange(!checked)}
+        className={cn(
+          'relative h-6 w-11 rounded-full border transition-colors duration-[var(--duration-normal)]',
+          checked
+            ? 'border-accent bg-accent'
+            : 'border-border bg-bg-tertiary',
+        )}
+      >
+        <motion.span
+          className="absolute top-0.5 left-0.5 h-4.5 w-4.5 rounded-full bg-white shadow-sm"
+          animate={{ x: checked ? 20 : 0 }}
+          transition={{ type: 'spring', stiffness: 420, damping: 30 }}
+        />
+      </button>
+      {label && <span>{label}</span>}
+    </label>
+  );
 }
 
-// ─── EmptyState ───
 interface EmptyStateProps {
-    icon?: ReactNode;
-    title: string;
-    description?: string;
-    action?: ReactNode;
-    className?: string;
+  icon?: ReactNode;
+  title: string;
+  description?: string;
+  action?: ReactNode;
+  className?: string;
 }
 
-export function EmptyState({ icon, title, description, action, className }: EmptyStateProps) {
-    return (
-        <div className={cn('flex flex-col items-center justify-center py-16 px-4 text-center', className)}>
-            {icon && <div className="mb-4 text-text-muted opacity-50">{icon}</div>}
-            <h3 className="text-base font-semibold text-text-secondary mb-1">{title}</h3>
-            {description && <p className="text-sm text-text-muted max-w-sm">{description}</p>}
-            {action && <div className="mt-4">{action}</div>}
+export function EmptyState({
+  icon,
+  title,
+  description,
+  action,
+  className,
+}: EmptyStateProps) {
+  return (
+    <div
+      className={cn(
+        'flex flex-col items-center justify-center px-4 py-16 text-center',
+        className,
+      )}
+    >
+      {icon && (
+        <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-bg-tertiary text-text-muted">
+          {icon}
         </div>
-    );
+      )}
+      <h3 className="text-lg font-semibold text-text-primary">{title}</h3>
+      {description && <p className="mt-2 max-w-sm text-sm text-text-muted">{description}</p>}
+      {action && <div className="mt-5">{action}</div>}
+    </div>
+  );
 }
 
-// ─── Page Header ───
 interface PageHeaderProps {
-    title: string;
-    description?: string;
-    actions?: ReactNode;
-    breadcrumbs?: { label: string; href?: string }[];
-    className?: string;
+  title: string;
+  description?: string;
+  actions?: ReactNode;
+  breadcrumbs?: { label: string; href?: string }[];
+  className?: string;
 }
 
-export function PageHeader({ title, description, actions, className }: PageHeaderProps) {
-    return (
-        <div className={cn('flex items-start justify-between gap-4', className)}>
-            <div>
-                <h1 className="text-xl font-bold text-text-primary tracking-tight">{title}</h1>
-                {description && <p className="text-sm text-text-muted mt-1">{description}</p>}
-            </div>
-            {actions && <div className="flex items-center gap-2 shrink-0">{actions}</div>}
-        </div>
-    );
+export function PageHeader({
+  title,
+  description,
+  actions,
+  className,
+}: PageHeaderProps) {
+  return (
+    <div
+      className={cn(
+        'flex flex-col gap-4 border-b border-border-subtle pb-4 sm:flex-row sm:items-end sm:justify-between',
+        className,
+      )}
+    >
+      <div className="space-y-1.5">
+        <h1 className="text-[28px] font-semibold tracking-[-0.04em] text-text-primary">{title}</h1>
+        {description && <p className="max-w-3xl text-sm text-text-muted">{description}</p>}
+      </div>
+      {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
+    </div>
+  );
 }
 
-// ─── Filter Bar ───
 interface FilterBarProps {
-    children: ReactNode;
-    className?: string;
+  children: ReactNode;
+  className?: string;
 }
 
 export function FilterBar({ children, className }: FilterBarProps) {
-    return (
-        <div className={cn('flex items-center gap-3 flex-wrap', className)}>
-            {children}
-        </div>
-    );
+  return <div className={cn('flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center', className)}>{children}</div>;
 }
