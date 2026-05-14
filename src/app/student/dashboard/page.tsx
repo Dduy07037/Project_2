@@ -61,7 +61,7 @@ export default function StudentDashboard() {
                 history: historyResponse,
             });
         } catch (loadError) {
-            setError(loadError instanceof Error ? loadError.message : 'Khong the tai dashboard sinh vien.');
+            setError(loadError instanceof Error ? loadError.message : 'Không thể tải dashboard sinh viên.');
         }
     }, [fetchDashboard]);
 
@@ -86,7 +86,7 @@ export default function StudentDashboard() {
                     return;
                 }
 
-                setError(loadError instanceof Error ? loadError.message : 'Khong the tai dashboard sinh vien.');
+                setError(loadError instanceof Error ? loadError.message : 'Không thể tải dashboard sinh viên.');
             }
         }
 
@@ -124,8 +124,8 @@ export default function StudentDashboard() {
         <motion.div variants={staggerContainer} initial="initial" animate="enter" className="space-y-8">
             <motion.div variants={staggerItem}>
                 <PageHeader
-                    title={`Xin chao ${user?.fullName ?? 'ban'}`}
-                    description="Tong hop ca thi sap toi, tien do lam bai va ket qua gan day tren cung mot man hinh."
+                    title={`Xin chào ${user?.fullName ?? 'bạn'}`}
+                    description="Tổng hợp ca thi sắp tới, tiến độ làm bài và kết quả gần đây trên cùng một màn hình."
                     actions={(
                         <Link href="/student/exams">
                             <Button iconRight={<ChevronRight className="h-4 w-4" />}>
@@ -139,34 +139,34 @@ export default function StudentDashboard() {
             {error && !data ? (
                 <motion.div variants={staggerItem}>
                     <InlineState
-                        title="Khong the tai dashboard"
+                        title="Không thể tải dashboard"
                         description={error}
                         actions={(
                             <Button variant="secondary" icon={<RefreshCw className="h-4 w-4" />} onClick={() => void loadDashboard()}>
-                                Thu lai
+                                Thử lại
                             </Button>
                         )}
                     />
                 </motion.div>
             ) : !data ? (
                 <motion.div variants={staggerItem}>
-                    <InlineState title="Dang tai dashboard" description="ExamGuard dang tong hop sessions va lich su lam bai." />
+                    <InlineState title="Đang tải dashboard" description="ExamGuard đang tổng hợp sessions và lịch sử làm bài." />
                 </motion.div>
             ) : (
                 <>
                     <motion.div variants={staggerItem} className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
-                        <StatCard label="Ca thi kha dung" value={computed.upcomingSessions.length} icon={<CalendarDays className="h-5 w-5" />} accentColor="var(--color-accent)" />
+                        <StatCard label="Ca thi khả dụng" value={computed.upcomingSessions.length} icon={<CalendarDays className="h-5 w-5" />} accentColor="var(--color-accent)" />
                         <StatCard label="Da thi" value={data.history.length} icon={<CheckCircle2 className="h-5 w-5" />} accentColor="var(--color-text-secondary)" />
                         <StatCard label="Diem trung binh" value={computed.averageScore} icon={<TrendingUp className="h-5 w-5" />} accentColor="var(--color-success)" />
-                        <StatCard label="Dang lam" value={data.sessions.filter((session) => session.hasExistingAttempt && toStatusKey(session.attemptStatus) === 'in_progress').length} icon={<Clock className="h-5 w-5" />} accentColor="var(--color-warning)" />
+                        <StatCard label="Đang làm" value={data.sessions.filter((session) => session.hasExistingAttempt && toStatusKey(session.attemptStatus) === 'in_progress').length} icon={<Clock className="h-5 w-5" />} accentColor="var(--color-warning)" />
                     </motion.div>
 
                     <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
                         <motion.div variants={staggerItem} className="lg:col-span-3">
-                            <Panel title="Ca thi sap toi" description="Lay tu GET /api/exams/available">
+                            <Panel title="Ca thi sắp tới" description="Danh sách session sinh viên có thể tham gia trong thời gian sắp tới.">
                                 <div className="space-y-3">
                                     {computed.upcomingSessions.length === 0 ? (
-                                        <InlineState title="Khong co ca thi sap toi" description="Ban chua duoc mo session nao." />
+                                        <InlineState title="Không có ca thi sắp tới" description="Bạn chưa được mở session nào." />
                                     ) : computed.upcomingSessions.slice(0, 5).map((session) => (
                                         <Card key={session.sessionId} hover className="group !p-4">
                                             <div className="flex items-start gap-4">
@@ -193,7 +193,7 @@ export default function StudentDashboard() {
                                                     </Link>
                                                 ) : (
                                                     <Button size="sm" variant="secondary" disabled>
-                                                        Chua den gio
+                                                        Chưa đến giờ
                                                     </Button>
                                                 )}
                                             </div>
@@ -204,10 +204,10 @@ export default function StudentDashboard() {
                         </motion.div>
 
                         <motion.div variants={staggerItem} className="lg:col-span-2">
-                            <Panel title="Ket qua gan day" description="3 attempt moi nhat cua ban">
+                            <Panel title="Kết quả gần đây" description="3 attempt mới nhất của bạn">
                                 <div className="space-y-3">
                                     {computed.recentHistory.length === 0 ? (
-                                        <InlineState title="Chua co ket qua" description="Sau khi nop bai, lich su va diem se hien o day." />
+                                        <InlineState title="Chưa có kết quả" description="Sau khi nộp bài, lịch sử và điểm sẽ hiện ở đây." />
                                     ) : computed.recentHistory.map((attempt) => {
                                         const passed = typeof attempt.score === 'number' && attempt.score >= 5;
 
@@ -222,7 +222,7 @@ export default function StudentDashboard() {
                                                 <div className="min-w-0 flex-1">
                                                     <p className="truncate text-sm font-semibold text-text-primary">{attempt.examTitle}</p>
                                                     <div className="mt-0.5 flex items-center gap-2">
-                                                        <span className="text-xs text-text-muted">{attempt.correctAnswers ?? 'An'} / {attempt.totalQuestions} dung</span>
+                                                        <span className="text-xs text-text-muted">{attempt.correctAnswers ?? 'Ẩn'} / {attempt.totalQuestions} đúng</span>
                                                         <span className="text-xs text-text-muted">/</span>
                                                         <span className="text-xs text-text-muted">{attempt.timeSpentSeconds ? formatTime(attempt.timeSpentSeconds) : '-'}</span>
                                                     </div>

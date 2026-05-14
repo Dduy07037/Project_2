@@ -22,19 +22,52 @@ interface DataTableProps<T> {
   columns: Column<T>[];
   data: T[];
   keyField?: string;
+  getRowId?: (item: T, index: number) => string;
   onRowClick?: (item: T) => void;
   className?: string;
   emptyMessage?: string;
   loading?: boolean;
 }
 
+function resolveRowId<T>(
+  item: T,
+  index: number,
+  keyField: string,
+  getRowId?: (item: T, index: number) => string,
+) {
+  const explicitId = getRowId?.(item, index);
+  if (explicitId && explicitId.trim().length > 0) {
+    return explicitId;
+  }
+
+  const keyValue = (item as Record<string, unknown>)[keyField];
+  if (keyValue === null || keyValue === undefined || keyValue === '') {
+    return `row-${index}`;
+  }
+
+  if (typeof keyValue === 'string') {
+    return keyValue.trim().length > 0 ? keyValue : `row-${index}`;
+  }
+
+  if (
+    typeof keyValue === 'number'
+    || typeof keyValue === 'bigint'
+    || typeof keyValue === 'boolean'
+  ) {
+    return String(keyValue);
+  }
+
+  return `row-${index}`;
+}
+
 export function DataTable<T = Record<string, unknown>>({
   columns,
   data,
   keyField = 'id',
+  getRowId,
   onRowClick,
   className,
-  emptyMessage = 'Khong co du lieu',
+  emptyMessage = 'Không có dữ liệu',
   loading,
 }: DataTableProps<T>) {
   const columnCount = columns.length;
@@ -90,7 +123,7 @@ export function DataTable<T = Record<string, unknown>>({
                   )
                 : data.map((item, index) => (
                     <motion.tr
-                      key={String((item as Record<string, unknown>)[keyField]) || index}
+                      key={resolveRowId(item, index, keyField, getRowId)}
                       variants={staggerListItem}
                       initial="initial"
                       animate="enter"

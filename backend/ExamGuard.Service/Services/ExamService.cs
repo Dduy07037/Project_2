@@ -64,6 +64,9 @@ public class ExamService : IExamService
         if (!subject.IsActive)
             throw new AppException("Môn học này không còn hoạt động. Vui lòng chọn môn học khác.");
 
+        if (subject.CreatedById != currentUserId)
+            throw new ForbiddenException("Bạn không có quyền tạo kỳ thi cho môn học này.");
+
         // Validate
         if (request.QuestionCount < 1)
             throw new AppException("Số câu hỏi phải lớn hơn 0.");

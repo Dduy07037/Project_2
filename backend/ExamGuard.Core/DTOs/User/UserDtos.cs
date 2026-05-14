@@ -1,4 +1,5 @@
 using ExamGuard.Core.Enums;
+using System.ComponentModel.DataAnnotations;
 
 namespace ExamGuard.Core.DTOs.User;
 
@@ -19,6 +20,7 @@ public class UserDto
 // ─── Create ───
 public class CreateUserRequest
 {
+    [EmailAddress(ErrorMessage = "Email không đúng định dạng.")]
     public string Email { get; set; } = string.Empty;
     public string Password { get; set; } = string.Empty;
     public string FullName { get; set; } = string.Empty;

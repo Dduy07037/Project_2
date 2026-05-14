@@ -51,9 +51,9 @@ export function Topbar({
   const segments = pathname?.split('/').filter(Boolean) || [];
   const settingsHref = userRole === 'admin' ? '/admin/settings' : '/profile';
   const roleLabels: Record<string, string> = {
-    admin: 'Admin',
-    lecturer: 'Giang vien',
-    student: 'Sinh vien',
+    admin: 'Quản trị viên',
+    lecturer: 'Giảng viên',
+    student: 'Sinh viên',
   };
 
   return (
@@ -137,7 +137,7 @@ export function Topbar({
                     className="surface-panel absolute right-0 top-[calc(100%+0.75rem)] z-50 w-80 overflow-hidden rounded-[var(--radius-lg)]"
                   >
                     <div className="flex items-center justify-between border-b border-border-subtle px-4 py-3">
-                      <h4 className="text-sm font-medium text-text-primary">Thong bao</h4>
+                      <h4 className="text-sm font-medium text-text-primary">Thông báo</h4>
                       {unreadCount > 0 && (
                         <span className="rounded-full bg-danger/8 px-2 py-1 text-[11px] font-medium text-danger">
                           {unreadCount} moi
@@ -147,7 +147,7 @@ export function Topbar({
                     <div className="max-h-80 overflow-y-auto">
                       {notifications.length === 0 ? (
                         <div className="px-4 py-8 text-center text-sm text-text-muted">
-                          Chua co thong bao nao.
+                          Chưa có thông báo nào.
                         </div>
                       ) : (
                         notifications.map((notification) => (
@@ -213,21 +213,21 @@ export function Topbar({
                       className="flex items-center gap-2.5 rounded-[var(--radius-md)] px-3 py-2 text-sm text-text-secondary transition-colors hover:bg-surface-hover hover:text-text-primary"
                     >
                       <User className="h-4 w-4" />
-                      Ho so
+                      Hồ sơ
                     </Link>
                     <Link
                       href={settingsHref}
                       className="flex items-center gap-2.5 rounded-[var(--radius-md)] px-3 py-2 text-sm text-text-secondary transition-colors hover:bg-surface-hover hover:text-text-primary"
                     >
                       <Settings className="h-4 w-4" />
-                      Cai dat
+                      Cài đặt
                     </Link>
                     <button
                       onClick={() => void onLogout()}
                       className="flex w-full items-center gap-2.5 rounded-[var(--radius-md)] px-3 py-2 text-sm text-danger transition-colors hover:bg-danger/8"
                     >
                       <LogOut className="h-4 w-4" />
-                      Dang xuat
+                      Đăng xuất
                     </button>
                   </motion.div>
                 </>
@@ -248,7 +248,7 @@ export function Topbar({
           >
             <SearchInput
               autoFocus
-              placeholder="Tim kiem..."
+              placeholder="Tìm kiếm..."
               onKeyDown={(event) => {
                 if (event.key === 'Escape') {
                   setShowSearch(false);

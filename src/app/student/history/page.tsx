@@ -31,7 +31,7 @@ export default function StudentHistoryPage() {
             const response = await getAttemptHistory(request);
             setHistory(response);
         } catch (loadError) {
-            setError(loadError instanceof Error ? loadError.message : 'Khong the tai lich su thi.');
+            setError(loadError instanceof Error ? loadError.message : 'Không thể tải lịch sử thi.');
         } finally {
             setLoading(false);
         }
@@ -46,25 +46,25 @@ export default function StudentHistoryPage() {
     return (
         <motion.div variants={staggerContainer} initial="initial" animate="enter" className="space-y-6">
             <motion.div variants={staggerItem}>
-                <PageHeader title="Lich su thi" description="Tat ca attempt cua ban tu /api/attempts/history." />
+                <PageHeader title="Lịch sử thi" description="Tổng hợp toàn bộ attempt, kết quả và thời gian làm bài của bạn." />
             </motion.div>
 
             <motion.div variants={staggerItem} className="space-y-3">
                 {error ? (
                     <InlineState
                         icon={<AlertCircle className="h-10 w-10" />}
-                        title="Khong the tai lich su"
+                        title="Không thể tải lịch sử"
                         description={error}
                         actions={(
                             <Button variant="secondary" icon={<RefreshCw className="h-4 w-4" />} onClick={() => void loadHistory()}>
-                                Thu lai
+                                Thử lại
                             </Button>
                         )}
                     />
                 ) : loading && history.length === 0 ? (
-                    <InlineState title="Dang tai lich su" description="ExamGuard dang doc cac attempt da ghi nhan cho tai khoan hien tai." />
+                    <InlineState title="Đang tải lịch sử" description="ExamGuard đang đọc các attempt đã ghi nhận cho tài khoản hiện tại." />
                 ) : sortedHistory.length === 0 ? (
-                    <InlineState icon={<History className="h-10 w-10" />} title="Chua co lich su thi" description="Ban chua tham gia ky thi nao." />
+                    <InlineState icon={<History className="h-10 w-10" />} title="Chưa có lịch sử thi" description="Bạn chưa tham gia kỳ thi nào." />
                 ) : sortedHistory.map((attempt) => {
                     const scoreValue = typeof attempt.score === 'number' ? attempt.score : null;
                     const showScore = scoreValue !== null;

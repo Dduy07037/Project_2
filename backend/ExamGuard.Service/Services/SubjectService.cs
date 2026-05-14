@@ -177,11 +177,16 @@ public class SubjectService : ISubjectService
         if (!isAdmin && subject.CreatedById != currentUserId)
             throw new ForbiddenException("You do not have permission to add categories to this subject.");
 
+        if (string.IsNullOrWhiteSpace(request.Name))
+            throw new AppException("Category name is required.");
+
+        var normalizedName = request.Name.Trim();
+
         var category = new QuestionCategory
         {
             Id = Guid.NewGuid(),
             SubjectId = subjectId,
-            Name = request.Name.Trim(),
+            Name = normalizedName,
             CreatedAt = DateTime.UtcNow
         };
 

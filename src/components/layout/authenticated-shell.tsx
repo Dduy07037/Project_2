@@ -37,7 +37,7 @@ export function AuthenticatedShell({ children }: AuthenticatedShellProps) {
     return (
       <FullscreenState
         icon={<ShieldCheck className="h-10 w-10" />}
-        title="Dang xac thuc phien lam viec"
+        title="Đang xác thực phiên làm việc"
         description="ExamGuard dang kiem tra thong tin dang nhap hien tai."
       />
     );
@@ -51,7 +51,7 @@ export function AuthenticatedShell({ children }: AuthenticatedShellProps) {
     return (
       <FullscreenState
         icon={<ShieldAlert className="h-10 w-10" />}
-        title="Khong tim thay tai khoan"
+        title="Không tìm thấy tài khoản"
         description="Phien lam viec hien tai khong con hop le."
       />
     );

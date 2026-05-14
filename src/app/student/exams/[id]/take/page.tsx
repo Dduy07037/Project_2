@@ -1,20 +1,20 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import {
   AlertCircle,
+  AlertTriangle,
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
   Clock,
-  Copy,
   Lock,
   Send,
   Shield,
 } from 'lucide-react';
-import { Badge, Button, Card, InlineState, Input, StatusBadge } from '@/components/ui';
+import { Badge, Button, Card, InlineState, Input, Modal } from '@/components/ui';
 import { useToast } from '@/components/ui/toast';
 import { useAuth } from '@/components/providers/auth-provider';
 import { cn } from '@/lib/cn';
@@ -27,9 +27,16 @@ import {
   submitAttempt,
   toStatusKey,
   type AttemptDetailDto,
+  type AttemptEventResultDto,
   type AttemptSummaryDto,
   type AvailableSessionDto,
 } from '@/lib/api/exam-guard';
+import {
+  getAttemptEventDescription,
+  getAttemptEventMeta,
+  getAttemptStatusMeta,
+  getFlagReasonLabels,
+} from '@/lib/exam-guard-labels';
 import { formatDateTime } from '@/lib/utils';
 
 type EventName =
@@ -38,12 +45,14 @@ type EventName =
   | 'PageReload'
   | 'CopyAttempt'
   | 'PasteAttempt'
-  | 'RightClick';
+  | 'RightClick'
+  | 'ResumeAttempt';
 
 export default function ExamTakePage() {
   const { request } = useAuth();
   const { toast } = useToast();
   const params = useParams<{ id: string }>();
+  const router = useRouter();
   const sessionId = params.id;
 
   const [session, setSession] = useState<AvailableSessionDto | null>(null);
@@ -57,21 +66,43 @@ export default function ExamTakePage() {
   const [saving, setSaving] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [autoSaved, setAutoSaved] = useState(false);
+  const [showSubmitModal, setShowSubmitModal] = useState(false);
+  const [autoSubmitNotice, setAutoSubmitNotice] = useState<{ title: string; message: string } | null>(null);
   const [nowMs, setNowMs] = useState(Date.now());
 
   const saveBadgeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reloadLoggedRef = useRef(false);
+  const resumeLoggedRef = useRef(false);
+  const resumedAttemptRef = useRef(false);
+  const navigationMarkerRef = useRef('');
 
   const attemptId = detail?.attempt.id;
   const questions = detail?.questions ?? [];
   const currentQuestion = questions[questionIndex];
   const answeredCount = questions.filter((item) => !!item.selectedOptionSnapshotId).length;
+  const unansweredCount = Math.max(questions.length - answeredCount, 0);
   const expiresAt = detail?.attempt.expiresAt ?? submitted?.expiresAt;
   const timeLeftSeconds = expiresAt
     ? Math.max(0, Math.floor((new Date(expiresAt).getTime() - nowMs) / 1000))
     : 0;
   const timerClassName =
     timeLeftSeconds <= 300 ? 'timer-urgent' : timeLeftSeconds <= 600 ? 'timer-warning' : '';
+  const activeSummary = submitted ?? detail?.attempt ?? null;
+  const attemptStatusMeta = getAttemptStatusMeta(activeSummary?.status);
+  const flagLabels = getFlagReasonLabels(activeSummary?.flagReason);
+  const recentEvents = detail?.recentEvents.slice(-5) ?? [];
+
+  useEffect(() => {
+    if (!navigationMarkerRef.current && typeof window !== 'undefined') {
+      navigationMarkerRef.current = `${window.location.pathname}:${window.performance.timeOrigin}`;
+    }
+  }, []);
+
+  useEffect(() => () => {
+    if (saveBadgeTimeoutRef.current) {
+      clearTimeout(saveBadgeTimeoutRef.current);
+    }
+  }, []);
 
   const syncSummary = useCallback((summary: AttemptSummaryDto) => {
     setDetail((current) => (current ? { ...current, attempt: summary } : current));
@@ -89,28 +120,39 @@ export default function ExamTakePage() {
   }, []);
 
   const logEvent = useCallback(
-    async (eventType: EventName, details?: string) => {
+    async (eventType: EventName, eventDetails?: string): Promise<AttemptEventResultDto | null> => {
       if (!attemptId || submitted) {
-        return;
+        return null;
       }
 
       try {
         const result = await logAttemptEvent(request, attemptId, {
           eventType,
-          details,
+          details: eventDetails,
           clientTimestamp: new Date().toISOString(),
         });
+
         syncSummary(result.attempt);
         setDetail((current) => (current ? { ...current, recentEvents: result.recentEvents } : current));
-        if (result.autoSubmitted) {
+
+        if (result.autoSubmitted || toStatusKey(result.attempt.status) === 'auto_submitted') {
+          const message = getFlagReasonLabels(result.attempt.flagReason)[0]
+            || 'Bai thi da duoc tu dong nop do vuot qua gioi han roi tab.';
+
+          setAutoSubmitNotice({
+            title: 'Bai thi da duoc tu dong nop',
+            message,
+          });
           toast({
             type: 'warning',
-            title: 'Attempt da bi auto-submit',
-            message: result.attempt.flagReason || undefined,
+            title: 'Attempt da bi tu dong nop',
+            message,
           });
         }
+
+        return result;
       } catch {
-        // Event logging should not block the exam screen.
+        return null;
       }
     },
     [attemptId, request, submitted, syncSummary, toast],
@@ -121,17 +163,19 @@ export default function ExamTakePage() {
       setLoading(true);
       setError(null);
       setPasswordError(null);
+      resumedAttemptRef.current = false;
 
       try {
         const sessions = await getAvailableSessions(request);
         const matched = sessions.find((item) => item.sessionId === sessionId);
         if (!matched) {
-          throw new Error('Session khong ton tai hoac khong con kha dung.');
+          throw new Error('Session không tồn tại hoặc không còn khả dụng.');
         }
 
         setSession(matched);
 
         if (matched.attemptId && toStatusKey(matched.attemptStatus) === 'in_progress') {
+          resumedAttemptRef.current = true;
           const existing = await getAttempt(request, matched.attemptId);
           setDetail(existing);
           if (toStatusKey(existing.attempt.status) !== 'in_progress') {
@@ -155,7 +199,7 @@ export default function ExamTakePage() {
         }
       } catch (bootError) {
         const message =
-          bootError instanceof Error ? bootError.message : 'Khong the khoi tao phien thi.';
+          bootError instanceof Error ? bootError.message : 'Không thể khởi tạo phiên thi.';
         if ((session?.requiresPassword || message.toLowerCase().includes('password')) && !detail) {
           setPasswordError(message);
         } else {
@@ -193,6 +237,11 @@ export default function ExamTakePage() {
       .then((result) => {
         setSubmitted(result);
         syncSummary(result);
+        toast({
+          type: 'warning',
+          title: 'Het gio lam bai',
+          message: 'He thong da tu dong nop bai thi cua ban.',
+        });
       })
       .catch((submitError) => {
         toast({
@@ -205,17 +254,45 @@ export default function ExamTakePage() {
   }, [detail, request, submitted, syncSummary, timeLeftSeconds, toast]);
 
   useEffect(() => {
-    if (!attemptId || submitted || reloadLoggedRef.current) {
+    if (!attemptId || submitted) {
       return;
     }
 
     const navEntry = performance.getEntriesByType('navigation')[0] as
       | PerformanceNavigationTiming
       | undefined;
-    if (navEntry?.type === 'reload') {
-      reloadLoggedRef.current = true;
-      void logEvent('PageReload', 'Browser reload detected');
+
+    if (navEntry?.type !== 'reload') {
+      return;
     }
+
+    const marker = navigationMarkerRef.current || `${window.location.pathname}:${window.performance.timeOrigin}`;
+    navigationMarkerRef.current = marker;
+
+    const reloadKey = `examguard:reload:${attemptId}:${marker}`;
+    if (reloadLoggedRef.current || sessionStorage.getItem(reloadKey) === '1') {
+      return;
+    }
+
+    sessionStorage.setItem(reloadKey, '1');
+    reloadLoggedRef.current = true;
+
+    void (async () => {
+      const reloadResult = await logEvent('PageReload', 'Browser reload detected');
+
+      if (!reloadResult || reloadResult.autoSubmitted || !resumedAttemptRef.current) {
+        return;
+      }
+
+      const resumeKey = `examguard:resume:${attemptId}:${marker}`;
+      if (resumeLoggedRef.current || sessionStorage.getItem(resumeKey) === '1') {
+        return;
+      }
+
+      sessionStorage.setItem(resumeKey, '1');
+      resumeLoggedRef.current = true;
+      await logEvent('ResumeAttempt', 'Resumed after browser reload');
+    })();
   }, [attemptId, logEvent, submitted]);
 
   useEffect(() => {
@@ -297,7 +374,7 @@ export default function ExamTakePage() {
       } catch (saveError) {
         toast({
           type: 'error',
-          title: 'Luu dap an that bai',
+          title: 'Lưu đáp án thất bại',
           message: saveError instanceof Error ? saveError.message : undefined,
         });
       } finally {
@@ -313,11 +390,17 @@ export default function ExamTakePage() {
     }
 
     setSubmitting(true);
+    setShowSubmitModal(false);
+
     try {
       const result = await submitAttempt(request, detail.attempt.id, 'Manual', new Date().toISOString());
       setSubmitted(result);
       syncSummary(result);
-      toast({ type: 'success', title: 'Da nop bai thanh cong' });
+      toast({
+        type: 'success',
+        title: 'Đã nộp bài thành công',
+        message: 'ExamGuard da ghi nhan bai lam va khoa chinh sua dap an.',
+      });
     } catch (submitError) {
       toast({
         type: 'error',
@@ -329,17 +412,64 @@ export default function ExamTakePage() {
     }
   }, [detail, request, syncSummary, toast]);
 
+  const policyItems = useMemo(() => {
+    if (!detail) {
+      return [];
+    }
+
+    return [
+      {
+        title: '1. Rời tab tối đa',
+        value: `${detail.policy.maxTabSwitches} lan`,
+        note: 'Moi lan roi khoi tab bai thi deu duoc ghi nhan.',
+      },
+      {
+        title: '2. Tự động nộp khi vượt giới hạn',
+        value: detail.policy.autoSubmitOnTabLimit ? 'Có bật' : 'Không bật',
+        note: detail.policy.autoSubmitOnTabLimit
+          ? 'Vuot nguong roi tab co the bi tu dong nop ngay.'
+          : 'Chi danh dau vi pham, khong tu dong nop.',
+      },
+      {
+        title: '3. Copy/Paste',
+        value: detail.policy.allowCopyPaste ? 'Cho phep' : 'Bi chan',
+        note: detail.policy.allowCopyPaste
+          ? 'Hệ thống không chặn copy và paste trong attempt này.'
+          : 'Copy va paste se bi chan va ghi log.',
+      },
+      {
+        title: '4. Reload trang',
+        value: 'Ghi nhan khi tai lai that su',
+        note: 'Chi log PageReload khi trinh duyet xac dinh day la thao tac reload.',
+      },
+      {
+        title: '5. Trả lời quá nhanh',
+        value: detail.policy.rapidAnswerThresholdSeconds > 0
+          ? `${detail.policy.rapidAnswerThresholdSeconds} giay`
+          : 'Không bật',
+        note: detail.policy.rapidAnswerThresholdSeconds > 0
+          ? 'Backend se danh dau neu co chuoi tra loi qua nhanh.'
+          : 'Không có ngưỡng rapid answer cho attempt này.',
+      },
+    ];
+  }, [detail]);
+
+  const handleAutoSubmitAcknowledge = useCallback(() => {
+    setAutoSubmitNotice(null);
+    router.push('/student/history');
+  }, [router]);
+
   if (error && !detail && !submitted) {
     return (
       <div className="min-h-screen px-4 py-6 sm:px-6 lg:px-10">
         <div className="mx-auto flex min-h-[calc(100vh-3rem)] max-w-[720px] items-center justify-center">
           <InlineState
             icon={<AlertCircle className="h-10 w-10" />}
-            title="Khong the mo phien thi"
+            title="Không thể mở phiên thi"
             description={error}
             actions={
               <Link href="/student/exams">
-                <Button variant="secondary">Quay lai</Button>
+                <Button variant="secondary">Quay lại</Button>
               </Link>
             }
           />
@@ -353,7 +483,7 @@ export default function ExamTakePage() {
       <div className="min-h-screen px-4 py-6 sm:px-6 lg:px-10">
         <div className="mx-auto flex min-h-[calc(100vh-3rem)] max-w-[720px] items-center justify-center">
           <InlineState
-            title="Dang khoi tao phien thi"
+            title="Đang khởi tạo phiên thi"
             description="ExamGuard dang tai session va snapshot de thi that."
           />
         </div>
@@ -371,20 +501,37 @@ export default function ExamTakePage() {
                 <CheckCircle2 className="h-8 w-8" />
               </div>
               <div className="space-y-2">
+                <div className="flex flex-wrap items-center justify-center gap-2">
+                  <Badge variant={attemptStatusMeta.variant}>{attemptStatusMeta.label}</Badge>
+                  {submitted.submitType && (
+                    <Badge variant={submitted.submitType.toLowerCase() === 'auto' ? 'warning' : 'success'}>
+                      {submitted.submitType.toLowerCase() === 'auto' ? 'Tự động nộp' : 'Nộp thủ công'}
+                    </Badge>
+                  )}
+                </div>
                 <h1 className="text-[32px] font-semibold tracking-[-0.05em] text-text-primary">
-                  Da nop bai
+                  Đã nộp bài
                 </h1>
                 <p className="text-sm text-text-muted">
                   {submitted.examTitle} ·{' '}
                   {submitted.submittedAt ? formatDateTime(submitted.submittedAt) : 'vua xong'}
                 </p>
               </div>
+              {flagLabels.length > 0 && (
+                <div className="flex flex-wrap items-center justify-center gap-2">
+                  {flagLabels.map((label) => (
+                    <Badge key={label} variant="warning">
+                      {label}
+                    </Badge>
+                  ))}
+                </div>
+              )}
               <div className="grid w-full gap-3 md:grid-cols-4">
                 {[
                   ['Da tra loi', submitted.answeredQuestions],
-                  ['Bo trong', submitted.totalQuestions - submitted.answeredQuestions],
-                  ['Dung', submitted.correctAnswers ?? '—'],
-                  ['Diem', submitted.score ?? '—'],
+                  ['Bỏ trống', submitted.totalQuestions - submitted.answeredQuestions],
+                  ['Dung', submitted.correctAnswers ?? '-'],
+                  ['Diem', submitted.score ?? '-'],
                 ].map(([label, value]) => (
                   <div
                     key={String(label)}
@@ -408,6 +555,29 @@ export default function ExamTakePage() {
             </div>
           </Card>
         </div>
+
+        <Modal
+          open={Boolean(autoSubmitNotice)}
+          onClose={handleAutoSubmitAcknowledge}
+          title={autoSubmitNotice?.title}
+          description="Trang thai bai thi da duoc dong bo voi backend."
+          size="sm"
+        >
+          <div className="space-y-4">
+            <div className="rounded-[18px] border border-warning/20 bg-warning/8 px-4 py-3 text-sm text-text-secondary">
+              {autoSubmitNotice?.message}
+            </div>
+            <p className="text-sm text-text-muted">
+              Sau khi bai thi bi tu dong nop, ban se khong the tiep tuc chinh sua dap an.
+            </p>
+            <div className="flex justify-end gap-2">
+              <Button variant="ghost" onClick={() => router.push('/student/dashboard')}>
+                Dashboard
+              </Button>
+              <Button onClick={handleAutoSubmitAcknowledge}>Xem lich su</Button>
+            </div>
+          </div>
+        </Modal>
       </div>
     );
   }
@@ -425,16 +595,16 @@ export default function ExamTakePage() {
                 <p className="text-sm text-text-muted">{session.sessionName}</p>
               </div>
               <Input
-                label="Mat khau session"
+                label="Mật khẩu session"
                 type="password"
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
                 error={passwordError ?? undefined}
-                placeholder="Nhap mat khau de vao thi"
+                placeholder="Nhập mật khẩu để vào thi"
               />
               <div className="flex justify-end gap-2">
                 <Link href="/student/exams">
-                  <Button variant="ghost">Huy</Button>
+                  <Button variant="ghost">Hủy</Button>
                 </Link>
                 <Button onClick={() => void boot(password)} icon={<Lock className="h-4 w-4" />}>
                   Bat dau
@@ -457,7 +627,7 @@ export default function ExamTakePage() {
             description={`${session.sessionName} mo luc ${formatDateTime(session.startTime)}.`}
             actions={
               <Link href="/student/exams">
-                <Button variant="secondary">Quay lai</Button>
+                <Button variant="secondary">Quay lại</Button>
               </Link>
             }
           />
@@ -471,8 +641,8 @@ export default function ExamTakePage() {
       <div className="min-h-screen px-4 py-6 sm:px-6 lg:px-10">
         <div className="mx-auto flex min-h-[calc(100vh-3rem)] max-w-[720px] items-center justify-center">
           <InlineState
-            title="Khong co cau hoi"
-            description="Backend khong tra ve snapshot cau hoi cho attempt nay."
+            title="Không có câu hỏi"
+            description="Backend không trả về snapshot câu hỏi cho attempt này."
           />
         </div>
       </div>
@@ -502,18 +672,23 @@ export default function ExamTakePage() {
       <div className="mx-auto max-w-[1440px] space-y-4">
         <div className="surface-panel sticky top-4 z-30 rounded-[28px] px-4 py-4 sm:px-5">
           <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-            <div className="space-y-2">
+            <div className="space-y-3">
               <div className="flex flex-wrap items-center gap-2">
-                <StatusBadge status={toStatusKey(detail.attempt.status)} />
+                <Badge variant={attemptStatusMeta.variant}>{attemptStatusMeta.label}</Badge>
                 {autoSaved && <Badge variant="success">Da luu</Badge>}
-                {saving && <Badge variant="secondary">Dang dong bo</Badge>}
+                {saving && <Badge variant="secondary">Đang đồng bộ</Badge>}
+                {flagLabels.map((label) => (
+                  <Badge key={label} variant="warning">
+                    {label}
+                  </Badge>
+                ))}
               </div>
               <div>
                 <h1 className="text-[22px] font-semibold tracking-[-0.04em] text-text-primary">
                   {session?.examTitle || detail.attempt.examTitle}
                 </h1>
                 <p className="text-sm text-text-muted">
-                  Bat dau {formatDateTime(detail.attempt.startedAt)} · Het han{' '}
+                  {detail.attempt.subjectName} · Bắt đầu {formatDateTime(detail.attempt.startedAt)} · Hết hạn{' '}
                   {formatDateTime(detail.attempt.expiresAt)}
                 </p>
               </div>
@@ -538,21 +713,17 @@ export default function ExamTakePage() {
                 {answeredCount}/{questions.length} cau da tra loi
               </div>
               <Button
-                onClick={() => {
-                  if (window.confirm(`Nop bai voi ${answeredCount}/${questions.length} cau da tra loi?`)) {
-                    void handleSubmit();
-                  }
-                }}
+                onClick={() => setShowSubmitModal(true)}
                 disabled={submitting}
                 icon={<Send className="h-4 w-4" />}
               >
-                {submitting ? 'Dang nop bai' : 'Nop bai'}
+                {submitting ? 'Đang nộp bài' : 'Nộp bài'}
               </Button>
             </div>
           </div>
         </div>
 
-        <div className="grid gap-4 lg:grid-cols-[280px_minmax(0,1fr)]">
+        <div className="grid gap-4 lg:grid-cols-[320px_minmax(0,1fr)]">
           <aside className="space-y-4 lg:sticky lg:top-28 lg:self-start">
             <Card className="rounded-[28px] p-5">
               <div className="space-y-4">
@@ -561,25 +732,64 @@ export default function ExamTakePage() {
                   <p className="text-base font-medium text-text-primary">
                     {answeredCount}/{questions.length} cau da tra loi
                   </p>
+                  <p className="text-xs text-text-muted">
+                    Con {unansweredCount} cau chua duoc chon dap an.
+                  </p>
                 </div>
                 <div className="grid grid-cols-5 gap-2">{questionButtons}</div>
               </div>
             </Card>
 
             <Card className="rounded-[28px] p-5">
-              <div className="space-y-3">
+              <div className="space-y-4">
                 <div>
-                  <p className="text-sm font-medium text-text-primary">Anti-cheat policy</p>
+                  <p className="text-sm font-semibold text-text-primary">Chinh sach giam sat</p>
                   <p className="mt-1 text-xs leading-5 text-text-muted">
-                    Max tab switch: {detail.policy.maxTabSwitches} · Auto submit:{' '}
-                    {detail.policy.autoSubmitOnTabLimit ? 'Co' : 'Khong'} · Copy/paste:{' '}
-                    {detail.policy.allowCopyPaste ? 'Cho phep' : 'Chan'}
+                    He thong ghi nhan hanh vi trong luc thi de ho tro monitoring va hau kiem.
                   </p>
                 </div>
-                <div className="rounded-[18px] border border-border-subtle bg-bg-tertiary px-3 py-2 text-xs text-text-secondary">
+
+                <div className="space-y-3">
+                  {policyItems.map((item) => (
+                    <div
+                      key={item.title}
+                      className="rounded-[20px] border border-border-subtle bg-bg-tertiary px-4 py-3"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-medium text-text-primary">{item.title}</p>
+                          <p className="mt-1 text-xs leading-5 text-text-muted">{item.note}</p>
+                        </div>
+                        <Badge variant="secondary">{item.value}</Badge>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="rounded-[22px] border border-border-subtle bg-bg-tertiary px-4 py-4">
                   <div className="flex items-center gap-2">
-                    <Copy className="h-3.5 w-3.5" />
-                    Recent event: {detail.recentEvents.at(-1)?.eventType || 'ExamStart'}
+                    <Shield className="h-4 w-4 text-accent" />
+                    <p className="text-sm font-medium text-text-primary">Su kien gan day</p>
+                  </div>
+                  <div className="mt-4 space-y-3 border-l border-border-subtle pl-4">
+                    {recentEvents.length === 0 ? (
+                      <p className="text-xs text-text-muted">Chưa có event log mới cho attempt này.</p>
+                    ) : recentEvents.map((event) => {
+                      const eventMeta = getAttemptEventMeta(event.eventType);
+
+                      return (
+                        <div key={event.id} className="relative space-y-1">
+                          <span className="absolute -left-[22px] top-1.5 h-2.5 w-2.5 rounded-full bg-accent" />
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Badge variant={eventMeta.variant}>{eventMeta.label}</Badge>
+                            <span className="text-[11px] text-text-muted">{formatDateTime(event.timestamp)}</span>
+                          </div>
+                          <p className="text-xs leading-5 text-text-secondary">
+                            {getAttemptEventDescription(event)}
+                          </p>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               </div>
@@ -592,7 +802,7 @@ export default function ExamTakePage() {
                 <div className="flex flex-col gap-3 border-b border-border-subtle pb-5 sm:flex-row sm:items-start sm:justify-between">
                   <div className="space-y-3">
                     <p className="text-xs font-medium text-accent">
-                      Cau {questionIndex + 1} / {questions.length}
+                      Câu {questionIndex + 1} / {questions.length}
                     </p>
                     <h2 className="text-[28px] font-semibold tracking-[-0.04em] text-text-primary">
                       {currentQuestion.content}
@@ -648,7 +858,7 @@ export default function ExamTakePage() {
                     onClick={() => setQuestionIndex((value) => value - 1)}
                     icon={<ChevronLeft className="h-4 w-4" />}
                   >
-                    Cau truoc
+                    Câu trước
                   </Button>
                   <div className="flex items-center gap-2 text-xs text-text-muted">
                     <Shield className="h-3.5 w-3.5" />
@@ -660,7 +870,7 @@ export default function ExamTakePage() {
                     onClick={() => setQuestionIndex((value) => value + 1)}
                     iconRight={<ChevronRight className="h-4 w-4" />}
                   >
-                    Cau sau
+                    Câu sau
                   </Button>
                 </div>
               </div>
@@ -668,6 +878,71 @@ export default function ExamTakePage() {
           </section>
         </div>
       </div>
+
+      <Modal
+        open={showSubmitModal}
+        onClose={() => {
+          if (!submitting) {
+            setShowSubmitModal(false);
+          }
+        }}
+        title="Xac nhan nop bai"
+        description="Kiem tra nhanh tien do truoc khi khoa bai lam."
+        size="sm"
+      >
+        <div className="space-y-4">
+          <div className="rounded-[18px] border border-border-subtle bg-bg-tertiary px-4 py-4">
+            <p className="text-xs text-text-muted">Tien do hien tai</p>
+            <p className="mt-1 text-2xl font-semibold tracking-[-0.04em] text-text-primary">
+              {answeredCount}/{questions.length}
+            </p>
+            <p className="mt-1 text-sm text-text-secondary">cau da tra loi</p>
+          </div>
+
+          {unansweredCount > 0 && (
+            <div className="rounded-[18px] border border-warning/20 bg-warning/8 px-4 py-3 text-sm text-text-secondary">
+              Con {unansweredCount} cau chua tra loi. Neu nop bai bay gio, cac cau nay se duoc tinh la bo trong.
+            </div>
+          )}
+
+          <div className="rounded-[18px] border border-danger/15 bg-danger/6 px-4 py-3 text-sm text-text-secondary">
+            Sau khi nop bai, ban se khong the sua dap an hoac quay lai trang thi.
+          </div>
+
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" onClick={() => setShowSubmitModal(false)} disabled={submitting}>
+              Hủy
+            </Button>
+            <Button onClick={() => void handleSubmit()} loading={submitting} icon={<Send className="h-4 w-4" />}>
+              Nop bai
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        open={Boolean(autoSubmitNotice) && !submitted}
+        onClose={handleAutoSubmitAcknowledge}
+        title={autoSubmitNotice?.title}
+        description="Attempt nay da bi dong tren backend."
+        size="sm"
+      >
+        <div className="space-y-4">
+          <div className="rounded-[18px] border border-warning/20 bg-warning/8 px-4 py-3 text-sm text-text-secondary">
+            {autoSubmitNotice?.message}
+          </div>
+          <div className="flex items-start gap-2 rounded-[18px] border border-border-subtle bg-bg-tertiary px-4 py-3 text-sm text-text-secondary">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
+            <span>Bai thi khong con o trang thai dang lam. Ban se duoc chuyen sang lich su thi.</span>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" onClick={() => router.push('/student/dashboard')}>
+              Dashboard
+            </Button>
+            <Button onClick={handleAutoSubmitAcknowledge}>Xem lich su</Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

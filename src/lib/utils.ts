@@ -1,5 +1,3 @@
-// ─── Format Helpers ───
-
 export function formatDate(date: Date | string): string {
     const d = new Date(date);
     return new Intl.DateTimeFormat('vi-VN', {
@@ -46,8 +44,6 @@ export function formatPercent(value: number, total: number): string {
     return `${Math.round((value / total) * 100)}%`;
 }
 
-// ─── Status Helpers ───
-
 export type ExamStatus = 'draft' | 'scheduled' | 'active' | 'completed' | 'archived';
 export type AttemptStatus = 'in_progress' | 'submitted' | 'auto_submitted' | 'flagged';
 export type UserRole = 'admin' | 'lecturer' | 'student';
@@ -87,8 +83,6 @@ export function getStatusLabel(status: string): string {
     };
     return map[status] || status;
 }
-
-// ─── Misc ───
 
 export function truncate(str: string, length: number): string {
     if (str.length <= length) return str;

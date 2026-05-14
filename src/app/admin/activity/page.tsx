@@ -32,7 +32,7 @@ export default function AdminActivityPage() {
             const response = await getActivity(request, 150);
             setActivity(response);
         } catch (loadError) {
-            setError(loadError instanceof Error ? loadError.message : 'Khong the tai activity log.');
+            setError(loadError instanceof Error ? loadError.message : 'Không thể tải activity log.');
         } finally {
             setLoading(false);
         }
@@ -97,8 +97,8 @@ export default function AdminActivityPage() {
         <motion.div variants={staggerContainer} initial="initial" animate="enter" className="space-y-6">
             <motion.div variants={staggerItem}>
                 <PageHeader
-                    title="Hoat dong he thong"
-                    description={`${activity.length} su kien dang hien thi tu endpoint /api/activity`}
+                    title="Hoạt động hệ thống"
+                    description={`${activity.length} su kien gan day dang duoc hien thi trong bang activity.`}
                 />
             </motion.div>
 
@@ -110,16 +110,16 @@ export default function AdminActivityPage() {
                 {error ? (
                     <InlineState
                         icon={<AlertCircle className="h-10 w-10" />}
-                        title="Khong the tai activity"
+                        title="Không thể tải activity"
                         description={error}
                         actions={(
                             <Button variant="secondary" icon={<RefreshCw className="h-4 w-4" />} onClick={() => void loadActivity()}>
-                                Thu lai
+                                Thử lại
                             </Button>
                         )}
                     />
                 ) : (
-                    <DataTable columns={columns} data={filteredActivity} loading={loading} emptyMessage="Chua co su kien nao phu hop." />
+                    <DataTable columns={columns} data={filteredActivity} getRowId={(item) => item.id} loading={loading} emptyMessage="Chưa có sự kiện nào phù hợp." />
                 )}
             </motion.div>
         </motion.div>

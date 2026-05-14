@@ -150,7 +150,7 @@ export default function LecturerExamsPage() {
         } catch (createError) {
             toast({
                 type: 'error',
-                title: 'Tao ky thi that bai',
+                title: 'Tạo kỳ thi thất bại',
                 message: createError instanceof Error ? createError.message : 'Da xay ra loi khong xac dinh.',
             });
         } finally {
@@ -161,7 +161,7 @@ export default function LecturerExamsPage() {
     const columns = [
         {
             key: 'title',
-            title: 'Ky thi',
+            title: 'Kỳ thi',
             render: (exam: ExamDto) => (
                 <div>
                     <p className="text-sm font-medium text-text-primary">{exam.title}</p>
@@ -171,7 +171,7 @@ export default function LecturerExamsPage() {
         },
         {
             key: 'config',
-            title: 'Cau hinh',
+            title: 'Cấu hình',
             render: (exam: ExamDto) => (
                 <div className="text-xs text-text-secondary space-y-0.5">
                     <div>{exam.questionCount} cau hoi</div>
@@ -202,11 +202,11 @@ export default function LecturerExamsPage() {
         <motion.div variants={staggerContainer} initial="initial" animate="enter" className="space-y-6">
             <motion.div variants={staggerItem}>
                 <PageHeader
-                    title="Quan ly ky thi"
+                    title="Quản lý kỳ thi"
                     description={`${exams.length} ky thi dang duoc doc tu ExamsController`}
                     actions={(
                         <Button icon={<Plus className="h-4 w-4" />} onClick={() => setShowCreateModal(true)}>
-                            Tao ky thi moi
+                            Tạo kỳ thi mới
                         </Button>
                     )}
                 />
@@ -229,7 +229,7 @@ export default function LecturerExamsPage() {
                         )}
                     />
                 ) : (
-                    <DataTable columns={columns} data={filteredExams} loading={loadingExams} emptyMessage="Chưa có kỳ thi nào phù hợp." />
+                    <DataTable columns={columns} data={filteredExams} getRowId={(item) => item.id} loading={loadingExams} emptyMessage="Chưa có kỳ thi nào phù hợp." />
                 )}
             </motion.div>
 
@@ -240,7 +240,7 @@ export default function LecturerExamsPage() {
                         setShowCreateModal(false);
                     }
                 }}
-                title="Tao ky thi moi"
+                title="Tạo kỳ thi mới"
                 description="Ban nhap thong tin draft exam. Session se duoc them o trang chi tiet."
                 size="lg"
             >

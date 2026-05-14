@@ -20,7 +20,7 @@ export default function NotFound() {
             <SearchX className="h-8 w-8" />
           </div>
           <h1 className="text-[56px] font-semibold tracking-[-0.06em] text-text-primary">404</h1>
-          <h2 className="mt-2 text-xl font-semibold text-text-primary">Khong tim thay trang</h2>
+          <h2 className="mt-2 text-xl font-semibold text-text-primary">Không tìm thấy trang</h2>
           <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-text-muted">
             Trang ban tim kiem khong ton tai hoac da duoc di chuyen. Hay quay lai dashboard
             de tiep tuc thao tac.

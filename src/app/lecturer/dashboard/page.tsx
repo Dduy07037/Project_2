@@ -64,7 +64,7 @@ export default function LecturerDashboard() {
                 snapshotAt: Date.now(),
             });
         } catch (loadError) {
-            setError(loadError instanceof Error ? loadError.message : 'Khong the tai dashboard giang vien.');
+            setError(loadError instanceof Error ? loadError.message : 'Không thể tải dashboard giảng viên.');
         }
     }, [fetchDashboard]);
 
@@ -91,7 +91,7 @@ export default function LecturerDashboard() {
                     return;
                 }
 
-                setError(loadError instanceof Error ? loadError.message : 'Khong the tai dashboard giang vien.');
+                setError(loadError instanceof Error ? loadError.message : 'Không thể tải dashboard giảng viên.');
             }
         }
 
@@ -140,14 +140,14 @@ export default function LecturerDashboard() {
             <motion.div variants={staggerItem}>
                 <PageHeader
                     title="Dashboard"
-                    description={`Xin chao ${user?.fullName ?? 'giang vien'}, day la tong hop cau hoi, ky thi va attempt can theo doi.`}
+                    description={`Xin chào ${user?.fullName ?? 'giảng viên'}, đây là tổng hợp câu hỏi, kỳ thi và attempt cần theo dõi.`}
                     actions={(
                         <div className="flex gap-2">
                             <Link href="/lecturer/questions">
                                 <Button variant="secondary">Mo ngan hang cau hoi</Button>
                             </Link>
                             <Link href="/lecturer/exams">
-                                <Button>Quan ly ky thi</Button>
+                                <Button>Quản lý kỳ thi</Button>
                             </Link>
                         </div>
                     )}
@@ -155,30 +155,30 @@ export default function LecturerDashboard() {
             </motion.div>
 
             <motion.div variants={staggerItem} className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                <StatCard label="Cau hoi" value={stats.questionCount} icon={<ClipboardList className="h-5 w-5" />} accentColor="var(--color-accent)" />
-                <StatCard label="Ky thi" value={stats.examCount} icon={<FileText className="h-5 w-5" />} accentColor="var(--color-text-secondary)" />
-                <StatCard label="Ca dang mo" value={stats.activeSessions} icon={<Clock className="h-5 w-5" />} accentColor="var(--color-success)" />
-                <StatCard label="Can xem xet" value={stats.flaggedCount} icon={<AlertTriangle className="h-5 w-5" />} accentColor="var(--color-warning)" />
+                <StatCard label="Câu hỏi" value={stats.questionCount} icon={<ClipboardList className="h-5 w-5" />} accentColor="var(--color-accent)" />
+                <StatCard label="Kỳ thi" value={stats.examCount} icon={<FileText className="h-5 w-5" />} accentColor="var(--color-text-secondary)" />
+                <StatCard label="Ca đang mở" value={stats.activeSessions} icon={<Clock className="h-5 w-5" />} accentColor="var(--color-success)" />
+                <StatCard label="Cần xem xét" value={stats.flaggedCount} icon={<AlertTriangle className="h-5 w-5" />} accentColor="var(--color-warning)" />
             </motion.div>
 
             {error && !data ? (
                 <motion.div variants={staggerItem}>
                     <InlineState
                         icon={<AlertCircle className="h-10 w-10" />}
-                        title="Khong the tai dashboard"
+                        title="Không thể tải dashboard"
                         description={error}
-                        actions={<Button variant="secondary" onClick={() => void loadDashboard()}>Thu lai</Button>}
+                        actions={<Button variant="secondary" onClick={() => void loadDashboard()}>Thử lại</Button>}
                     />
                 </motion.div>
             ) : !data ? (
                 <motion.div variants={staggerItem}>
-                    <InlineState title="Dang tai dashboard" description="ExamGuard dang tong hop du lieu giang vien." />
+                    <InlineState title="Đang tải dashboard" description="ExamGuard đang tổng hợp dữ liệu giảng viên." />
                 </motion.div>
             ) : (
                 <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
                     <motion.div variants={staggerItem} className="lg:col-span-2">
                         <Panel
-                            title="Ky thi cua toi"
+                            title="Kỳ thi của tôi"
                             description="Danh sach draft, published va session dang dien ra."
                             action={(
                                 <Link href="/lecturer/exams">
@@ -190,7 +190,7 @@ export default function LecturerDashboard() {
                         >
                             <div className="space-y-3">
                                 {data.exams.length === 0 ? (
-                                    <p className="text-sm text-text-muted">Chua co ky thi nao. Ban co the tao draft exam ngay trong trang danh sach.</p>
+                                    <p className="text-sm text-text-muted">Chưa có kỳ thi nào. Bạn có thể tạo draft exam ngay trong trang danh sách.</p>
                                 ) : data.exams.slice(0, 6).map((exam) => (
                                     <Link key={exam.id} href={`/lecturer/exams/${exam.id}`} className="block">
                                         <div className="flex items-center justify-between rounded-[var(--radius-md)] border border-border p-3 transition-all duration-150 hover:border-border-hover hover:bg-surface-hover">
@@ -230,7 +230,7 @@ export default function LecturerDashboard() {
                                     </div>
                                 ))}
                                 {stats.flaggedCount === 0 && (
-                                    <p className="text-sm text-text-muted">Chua co attempt bat thuong nao.</p>
+                                    <p className="text-sm text-text-muted">Chưa có attempt bất thường nào.</p>
                                 )}
                             </div>
                         </Panel>
@@ -238,7 +238,7 @@ export default function LecturerDashboard() {
                         <Panel title="Thong ke nhanh" description="Snapshot nhanh de ra quyet dinh trong ngay.">
                             <div className="space-y-3">
                                 <div className="flex items-center justify-between">
-                                    <span className="text-sm text-text-secondary">Tong attempts</span>
+                                    <span className="text-sm text-text-secondary">Tổng attempts</span>
                                     <span className="text-sm font-semibold text-text-primary">{data.attempts.length}</span>
                                 </div>
                                 <div className="flex items-center justify-between">
@@ -246,7 +246,7 @@ export default function LecturerDashboard() {
                                     <span className="text-sm font-semibold text-text-primary">{stats.averageScore}</span>
                                 </div>
                                 <div className="flex items-center justify-between">
-                                    <span className="text-sm text-text-secondary">Da nop bai</span>
+                                    <span className="text-sm text-text-secondary">Đã nộp bài</span>
                                     <span className="text-sm font-semibold text-success">
                                         {data.attempts.filter((item) => item.attempt.status.toLowerCase() === 'submitted').length}
                                     </span>

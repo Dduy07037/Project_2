@@ -49,6 +49,10 @@ export interface CreateSubjectRequest {
     createdById?: string | null;
 }
 
+export interface CreateCategoryRequest {
+    name: string;
+}
+
 export interface CategoryDto {
     id: string;
     subjectId: string;
@@ -319,11 +323,11 @@ export function toStatusKey(value: string | null | undefined): string {
 export function getRoleLabel(role: string): string {
     switch (role.trim().toLowerCase()) {
         case 'admin':
-            return 'Admin';
+            return 'Quản trị viên';
         case 'lecturer':
-            return 'Giang vien';
+            return 'Giảng viên';
         case 'student':
-            return 'Sinh vien';
+            return 'Sinh viên';
         default:
             return role;
     }
@@ -357,6 +361,10 @@ export async function getCategories(request: ApiRequester, subjectId: string) {
     return request<CategoryDto[]>(`/api/subjects/${subjectId}/categories`);
 }
 
+export async function createCategory(request: ApiRequester, subjectId: string, payload: CreateCategoryRequest) {
+    return request<CategoryDto>(`/api/subjects/${subjectId}/categories`, { method: 'POST' }, payload);
+}
+
 export async function getQuestions(request: ApiRequester, query?: Record<string, string | number | boolean | null | undefined>) {
     return request<PagedResult<QuestionDto>>(`/api/questions${buildQuery(query)}`);
 }
@@ -381,6 +389,10 @@ export async function getExam(request: ApiRequester, examId: string) {
 
 export async function createExam(request: ApiRequester, payload: CreateExamRequest) {
     return request<ExamDto>('/api/exams', { method: 'POST' }, payload);
+}
+
+export async function publishExam(request: ApiRequester, examId: string) {
+    return request<{ message: string }>(`/api/exams/${examId}/publish`, { method: 'PATCH' });
 }
 
 export async function createExamSession(request: ApiRequester, examId: string, payload: CreateSessionRequest) {

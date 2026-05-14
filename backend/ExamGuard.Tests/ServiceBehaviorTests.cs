@@ -19,6 +19,57 @@ namespace ExamGuard.Tests;
 public class ServiceBehaviorTests
 {
     [Fact]
+    public async Task CreateUserAsync_NormalizesTrimmedUppercaseEmail()
+    {
+        await using var db = CreateDbContext();
+        var service = new UserService(db, NullLogger<UserService>.Instance);
+
+        var created = await service.CreateUserAsync(new CreateUserRequest
+        {
+            Email = " Lecturer@Example.Test ",
+            Password = "Password123!",
+            FullName = "Lecturer One",
+            Role = "Lecturer"
+        });
+
+        Assert.Equal("lecturer@example.test", created.Email);
+    }
+
+    [Fact]
+    public async Task CreateUserAsync_RejectsInvalidEmailFormat()
+    {
+        await using var db = CreateDbContext();
+        var service = new UserService(db, NullLogger<UserService>.Instance);
+
+        var ex = await Assert.ThrowsAsync<AppException>(() => service.CreateUserAsync(new CreateUserRequest
+        {
+            Email = "invalid-email",
+            Password = "Password123!",
+            FullName = "Invalid Email User",
+            Role = "Student"
+        }));
+
+        Assert.Equal("Email không đúng định dạng.", ex.Message);
+    }
+
+    [Fact]
+    public async Task CreateUserAsync_RejectsDuplicateEmailAfterNormalization()
+    {
+        await using var db = CreateDbContext();
+        AddUser(db, UserRole.Lecturer, "lecturer@example.test");
+        await db.SaveChangesAsync();
+        var service = new UserService(db, NullLogger<UserService>.Instance);
+
+        await Assert.ThrowsAsync<ConflictException>(() => service.CreateUserAsync(new CreateUserRequest
+        {
+            Email = " Lecturer@Example.Test ",
+            Password = "Password123!",
+            FullName = "Lecturer Duplicate",
+            Role = "Lecturer"
+        }));
+    }
+
+    [Fact]
     public async Task LoginAsync_LocksUserAfterMaxFailedAttempts()
     {
         await using var db = CreateDbContext();
@@ -123,6 +174,77 @@ public class ServiceBehaviorTests
             }, lecturer.Id, isAdmin: false));
 
         Assert.Contains("Category does not belong", ex.Message);
+    }
+
+    [Fact]
+    public async Task CreateQuestionAsync_AllowsNullCategoryForOwnedSubject()
+    {
+        await using var db = CreateDbContext();
+        var lecturer = AddUser(db, UserRole.Lecturer, "lecturer@example.test");
+        var subject = AddSubject(db, lecturer.Id, "S101");
+        await db.SaveChangesAsync();
+
+        var service = new QuestionService(db, NullLogger<QuestionService>.Instance);
+
+        var created = await service.CreateQuestionAsync(new CreateQuestionRequest
+        {
+            SubjectId = subject.Id,
+            CategoryId = null,
+            Content = "Question without category",
+            Difficulty = "Medium",
+            Options = ValidOptions()
+        }, lecturer.Id);
+
+        Assert.Equal(subject.Id, created.SubjectId);
+        Assert.Null(created.CategoryId);
+    }
+
+    [Fact]
+    public async Task CreateQuestionAsync_RejectsSubjectCreatedByAnotherLecturer()
+    {
+        await using var db = CreateDbContext();
+        var lecturer1 = AddUser(db, UserRole.Lecturer, "lecturer1@example.test");
+        var lecturer2 = AddUser(db, UserRole.Lecturer, "lecturer2@example.test");
+        var otherSubject = AddSubject(db, lecturer2.Id, "OTH101");
+        await db.SaveChangesAsync();
+
+        var service = new QuestionService(db, NullLogger<QuestionService>.Instance);
+
+        await Assert.ThrowsAsync<ForbiddenException>(() =>
+            service.CreateQuestionAsync(new CreateQuestionRequest
+            {
+                SubjectId = otherSubject.Id,
+                CategoryId = null,
+                Content = "Unauthorized question",
+                Difficulty = "Medium",
+                Options = ValidOptions()
+            }, lecturer1.Id));
+    }
+
+    [Fact]
+    public async Task CreateExamAsync_RejectsSubjectCreatedByAnotherLecturer()
+    {
+        await using var db = CreateDbContext();
+        var lecturer1 = AddUser(db, UserRole.Lecturer, "lecturer1@example.test");
+        var lecturer2 = AddUser(db, UserRole.Lecturer, "lecturer2@example.test");
+        var otherSubject = AddSubject(db, lecturer2.Id, "OTH101");
+        AddQuestion(db, otherSubject.Id, lecturer2.Id, "Question in another lecturer subject");
+        await db.SaveChangesAsync();
+
+        var service = new ExamService(db, NullLogger<ExamService>.Instance);
+
+        await Assert.ThrowsAsync<ForbiddenException>(() =>
+            service.CreateExamAsync(new CreateExamRequest
+            {
+                Title = "Unauthorized exam",
+                SubjectId = otherSubject.Id,
+                QuestionCount = 1,
+                DurationMinutes = 30,
+                TotalPoints = 10,
+                ShuffleQuestions = true,
+                ShuffleOptions = true,
+                ShowResultToStudent = true
+            }, lecturer1.Id));
     }
 
     [Fact]

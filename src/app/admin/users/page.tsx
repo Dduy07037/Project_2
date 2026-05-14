@@ -30,6 +30,7 @@ import {
 } from '@/lib/api/exam-guard';
 import { formatDateTime } from '@/lib/utils';
 import { staggerContainer, staggerItem } from '@/lib/motion';
+import { isValidEmailAddress, normalizeEmailAddress } from '@/lib/validators';
 import { AlertCircle, KeyRound, Lock, Plus, RefreshCw, Unlock } from 'lucide-react';
 
 const emptyCreateForm: CreateUserRequest = {
@@ -41,6 +42,13 @@ const emptyCreateForm: CreateUserRequest = {
     department: '',
 };
 
+const emptyRoleCounts = {
+    all: 0,
+    admin: 0,
+    lecturer: 0,
+    student: 0,
+};
+
 export default function UsersPage() {
     const { request } = useAuth();
     const { toast } = useToast();
@@ -50,25 +58,44 @@ export default function UsersPage() {
     const [users, setUsers] = useState<UserDto[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [roleCounts, setRoleCounts] = useState(emptyRoleCounts);
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [submitting, setSubmitting] = useState(false);
     const [createForm, setCreateForm] = useState<CreateUserRequest>(emptyCreateForm);
+    const [emailError, setEmailError] = useState<string | null>(null);
 
     const loadUsers = useCallback(async () => {
         setLoading(true);
         setError(null);
 
         try {
-            const response = await getUsers(request, {
+            const baseQuery = {
                 search: search || undefined,
-                role: roleFilter !== 'all' ? roleFilter : undefined,
                 page: 1,
                 pageSize: 100,
-            });
+            };
 
-            setUsers(response.items);
+            const [globalResponse, filteredResponse] = await Promise.all([
+                getUsers(request, baseQuery),
+                getUsers(request, {
+                    ...baseQuery,
+                    role: roleFilter !== 'all' ? roleFilter : undefined,
+                }),
+            ]);
+
+            const counts = globalResponse.items.reduce((accumulator, user) => {
+                const roleKey = user.role.toLowerCase() as 'admin' | 'lecturer' | 'student';
+                accumulator.all += 1;
+                if (roleKey in accumulator) {
+                    accumulator[roleKey] += 1;
+                }
+                return accumulator;
+            }, { ...emptyRoleCounts });
+
+            setUsers(filteredResponse.items);
+            setRoleCounts(counts);
         } catch (loadError) {
-            setError(loadError instanceof Error ? loadError.message : 'Khong the tai danh sach nguoi dung.');
+            setError(loadError instanceof Error ? loadError.message : 'Không thể tải danh sách người dùng.');
         } finally {
             setLoading(false);
         }
@@ -78,47 +105,47 @@ export default function UsersPage() {
         void loadUsers();
     }, [loadUsers]);
 
-    const roleTabs = useMemo(() => {
-        const counts = users.reduce<Record<string, number>>((accumulator, user) => {
-            const roleKey = user.role.toLowerCase();
-            accumulator[roleKey] = (accumulator[roleKey] ?? 0) + 1;
-            return accumulator;
-        }, {});
-
-        return [
-            { id: 'all', label: 'Tat ca', count: users.length },
-            { id: 'admin', label: 'Admin', count: counts.admin ?? 0 },
-            { id: 'lecturer', label: 'Giang vien', count: counts.lecturer ?? 0 },
-            { id: 'student', label: 'Sinh vien', count: counts.student ?? 0 },
-        ];
-    }, [users]);
+    const roleTabs = useMemo(() => [
+        { id: 'all', label: 'Tất cả', count: roleCounts.all },
+        { id: 'admin', label: 'Quản trị viên', count: roleCounts.admin },
+        { id: 'lecturer', label: 'Giảng viên', count: roleCounts.lecturer },
+        { id: 'student', label: 'Sinh viên', count: roleCounts.student },
+    ], [roleCounts]);
 
     const handleCreateUser = useCallback(async () => {
         if (!createForm.fullName.trim() || !createForm.email.trim() || !createForm.password.trim()) {
-            toast({ type: 'warning', title: 'Thieu thong tin', message: 'Vui long nhap du ho ten, email va mat khau.' });
+            toast({ type: 'warning', title: 'Thiếu thông tin', message: 'Vui lòng nhập đủ họ tên, email và mật khẩu.' });
             return;
         }
 
+        const normalizedEmail = normalizeEmailAddress(createForm.email);
+        if (!isValidEmailAddress(normalizedEmail)) {
+            setEmailError('Email không đúng định dạng.');
+            return;
+        }
+
+        setEmailError(null);
         setSubmitting(true);
 
         try {
             await createUser(request, {
                 ...createForm,
-                email: createForm.email.trim(),
+                email: normalizedEmail,
                 fullName: createForm.fullName.trim(),
                 studentCode: createForm.studentCode?.trim() || undefined,
                 department: createForm.department?.trim() || undefined,
             });
 
-            toast({ type: 'success', title: 'Da tao tai khoan moi' });
+            toast({ type: 'success', title: 'Đã tạo tài khoản mới' });
             setShowCreateModal(false);
             setCreateForm(emptyCreateForm);
+            setEmailError(null);
             await loadUsers();
         } catch (createError) {
             toast({
                 type: 'error',
-                title: 'Tao tai khoan that bai',
-                message: createError instanceof Error ? createError.message : 'Da xay ra loi khong xac dinh.',
+                title: 'Tạo tài khoản thất bại',
+                message: createError instanceof Error ? createError.message : 'Đã xảy ra lỗi không xác định.',
             });
         } finally {
             setSubmitting(false);
@@ -130,13 +157,13 @@ export default function UsersPage() {
 
         try {
             await updateUserStatus(request, user.id, nextStatus);
-            toast({ type: 'success', title: `Da cap nhat trang thai ${user.fullName}` });
+            toast({ type: 'success', title: `Đã cập nhật trạng thái ${user.fullName}` });
             await loadUsers();
         } catch (statusError) {
             toast({
                 type: 'error',
-                title: 'Cap nhat trang thai that bai',
-                message: statusError instanceof Error ? statusError.message : 'Da xay ra loi khong xac dinh.',
+                title: 'Cập nhật trạng thái thất bại',
+                message: statusError instanceof Error ? statusError.message : 'Đã xảy ra lỗi không xác định.',
             });
         }
     }, [loadUsers, request, toast]);
@@ -146,14 +173,14 @@ export default function UsersPage() {
             await resetUserPassword(request, user.id, 'Password123!');
             toast({
                 type: 'success',
-                title: `Da reset mat khau cho ${user.fullName}`,
-                message: 'Mat khau tam thoi da duoc dat ve Password123!.',
+                title: `Đã đặt lại mật khẩu cho ${user.fullName}`,
+                message: 'Mật khẩu tạm thời đã được đặt về Password123!.',
             });
         } catch (resetError) {
             toast({
                 type: 'error',
-                title: 'Reset mat khau that bai',
-                message: resetError instanceof Error ? resetError.message : 'Da xay ra loi khong xac dinh.',
+                title: 'Đặt lại mật khẩu thất bại',
+                message: resetError instanceof Error ? resetError.message : 'Đã xảy ra lỗi không xác định.',
             });
         }
     }, [request, toast]);
@@ -161,7 +188,7 @@ export default function UsersPage() {
     const columns = [
         {
             key: 'name',
-            title: 'Nguoi dung',
+            title: 'Người dùng',
             render: (user: UserDto) => (
                 <div className="flex items-center gap-3">
                     <Avatar name={user.fullName} size="sm" />
@@ -174,7 +201,7 @@ export default function UsersPage() {
         },
         {
             key: 'role',
-            title: 'Vai tro',
+            title: 'Vai trò',
             render: (user: UserDto) => (
                 <Badge
                     variant={user.role.toLowerCase() === 'admin' ? 'danger' : user.role.toLowerCase() === 'lecturer' ? 'info' : 'primary'}
@@ -185,31 +212,31 @@ export default function UsersPage() {
         },
         {
             key: 'department',
-            title: 'Don vi',
+            title: 'Đơn vị',
             render: (user: UserDto) => <span className="text-sm text-text-secondary">{user.department || user.studentCode || '—'}</span>,
         },
         {
             key: 'status',
-            title: 'Trang thai',
+            title: 'Trạng thái',
             render: (user: UserDto) => <StatusBadge status={toStatusKey(user.status)} />,
         },
         {
             key: 'lastLoginAt',
-            title: 'Dang nhap cuoi',
+            title: 'Đăng nhập cuối',
             render: (user: UserDto) => (
-                <span className="text-xs text-text-muted">{user.lastLoginAt ? formatDateTime(user.lastLoginAt) : 'Chua dang nhap'}</span>
+                <span className="text-xs text-text-muted">{user.lastLoginAt ? formatDateTime(user.lastLoginAt) : 'Chưa đăng nhập'}</span>
             ),
         },
         {
             key: 'actions',
-            title: 'Tac vu',
+            title: 'Tác vụ',
             render: (user: UserDto) => (
                 <div className="flex items-center gap-2">
                     <Button
                         variant="ghost"
                         size="icon"
                         onClick={() => void handleResetPassword(user)}
-                        title="Reset password"
+                        title="Đặt lại mật khẩu"
                     >
                         <KeyRound className="h-4 w-4" />
                     </Button>
@@ -217,7 +244,7 @@ export default function UsersPage() {
                         variant="ghost"
                         size="icon"
                         onClick={() => void handleToggleStatus(user)}
-                        title={user.status.toLowerCase() === 'active' ? 'Disable account' : 'Enable account'}
+                        title={user.status.toLowerCase() === 'active' ? 'Vô hiệu hóa tài khoản' : 'Kích hoạt tài khoản'}
                     >
                         {user.status.toLowerCase() === 'active' ? <Lock className="h-4 w-4" /> : <Unlock className="h-4 w-4" />}
                     </Button>
@@ -230,11 +257,11 @@ export default function UsersPage() {
         <motion.div variants={staggerContainer} initial="initial" animate="enter" className="space-y-6">
             <motion.div variants={staggerItem}>
                 <PageHeader
-                    title="Quan ly nguoi dung"
-                    description={`${users.length} tai khoan dang hien thi tu backend`}
+                    title="Quản lý người dùng"
+                    description={`${users.length} tài khoản đang hiển thị`}
                     actions={(
                         <Button icon={<Plus className="h-4 w-4" />} onClick={() => setShowCreateModal(true)}>
-                            Tao tai khoan
+                            Tạo tài khoản
                         </Button>
                     )}
                 />
@@ -245,23 +272,23 @@ export default function UsersPage() {
             </motion.div>
 
             <motion.div variants={staggerItem} className="max-w-sm">
-                <SearchInput value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Tim theo ten, email, MSSV..." />
+                <SearchInput value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Tìm theo tên, email, MSSV..." />
             </motion.div>
 
             <motion.div variants={staggerItem}>
                 {error ? (
                     <InlineState
                         icon={<AlertCircle className="h-10 w-10" />}
-                        title="Khong the tai nguoi dung"
+                        title="Không thể tải người dùng"
                         description={error}
                         actions={(
                             <Button variant="secondary" icon={<RefreshCw className="h-4 w-4" />} onClick={() => void loadUsers()}>
-                                Thu lai
+                                Thử lại
                             </Button>
                         )}
                     />
                 ) : (
-                    <DataTable columns={columns} data={users} loading={loading} emptyMessage="Khong co tai khoan nao phu hop bo loc hien tai." />
+                    <DataTable columns={columns} data={users} getRowId={(item) => item.id} loading={loading} emptyMessage="Không có tài khoản nào phù hợp bộ lọc hiện tại." />
                 )}
             </motion.div>
 
@@ -272,38 +299,42 @@ export default function UsersPage() {
                         setShowCreateModal(false);
                     }
                 }}
-                title="Tao tai khoan moi"
-                description="Thong tin nay se duoc gui truc tiep den UsersController that."
+                title="Tạo tài khoản mới"
+                description="Thông tin này sẽ được gửi trực tiếp đến UsersController thật."
                 size="md"
             >
                 <div className="space-y-4">
                     <Input
-                        label="Ho va ten"
+                        label="Họ và tên"
                         value={createForm.fullName}
                         onChange={(event) => setCreateForm((current) => ({ ...current, fullName: event.target.value }))}
-                        placeholder="Nguyen Van A"
+                        placeholder="Nguyễn Văn A"
                     />
                     <Input
                         label="Email"
                         type="email"
                         value={createForm.email}
-                        onChange={(event) => setCreateForm((current) => ({ ...current, email: event.target.value }))}
+                        onChange={(event) => {
+                            setEmailError(null);
+                            setCreateForm((current) => ({ ...current, email: event.target.value }));
+                        }}
+                        error={emailError ?? undefined}
                         placeholder="email@example.com"
                     />
                     <Input
-                        label="Mat khau"
+                        label="Mật khẩu"
                         type="password"
                         value={createForm.password}
                         onChange={(event) => setCreateForm((current) => ({ ...current, password: event.target.value }))}
-                        placeholder="Toi thieu 6 ky tu"
+                        placeholder="Tối thiểu 6 ký tự"
                     />
                     <Select
-                        label="Vai tro"
+                        label="Vai trò"
                         value={createForm.role}
                         onChange={(value) => setCreateForm((current) => ({ ...current, role: value }))}
                         options={[
-                            { value: 'Student', label: 'Sinh vien' },
-                            { value: 'Lecturer', label: 'Giang vien' },
+                            { value: 'Student', label: 'Sinh viên' },
+                            { value: 'Lecturer', label: 'Giảng viên' },
                             { value: 'Admin', label: 'Admin' },
                         ]}
                     />
@@ -311,20 +342,20 @@ export default function UsersPage() {
                         label="MSSV"
                         value={createForm.studentCode ?? ''}
                         onChange={(event) => setCreateForm((current) => ({ ...current, studentCode: event.target.value }))}
-                        placeholder="Bo trong neu khong phai sinh vien"
+                        placeholder="Bỏ trống nếu không phải sinh viên"
                     />
                     <Input
-                        label="Don vi"
+                        label="Đơn vị"
                         value={createForm.department ?? ''}
                         onChange={(event) => setCreateForm((current) => ({ ...current, department: event.target.value }))}
                         placeholder="Khoa CNTT"
                     />
                     <div className="flex justify-end gap-2 pt-2">
                         <Button variant="ghost" onClick={() => setShowCreateModal(false)} disabled={submitting}>
-                            Huy
+                            Hủy
                         </Button>
                         <Button onClick={() => void handleCreateUser()} loading={submitting}>
-                            Luu tai khoan
+                            Lưu tài khoản
                         </Button>
                     </div>
                 </div>

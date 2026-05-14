@@ -28,7 +28,7 @@ export default function Page403() {
           <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
             <Link href="/login">
               <Button variant="secondary" icon={<ArrowLeft className="h-4 w-4" />}>
-                Dang nhap lai
+                Đăng nhập lại
               </Button>
             </Link>
             <Link href="/">

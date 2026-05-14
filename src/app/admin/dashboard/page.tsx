@@ -75,7 +75,7 @@ export default function AdminDashboard() {
                 snapshotAt: Date.now(),
             });
         } catch (loadError) {
-            setError(loadError instanceof Error ? loadError.message : 'Khong the tai dashboard admin.');
+            setError(loadError instanceof Error ? loadError.message : 'Không thể tải dashboard admin.');
         }
     }, [fetchDashboard]);
 
@@ -104,7 +104,7 @@ export default function AdminDashboard() {
                     return;
                 }
 
-                setError(loadError instanceof Error ? loadError.message : 'Khong the tai dashboard admin.');
+                setError(loadError instanceof Error ? loadError.message : 'Không thể tải dashboard admin.');
             }
         }
 
@@ -145,33 +145,33 @@ export default function AdminDashboard() {
             <motion.div variants={staggerItem}>
                 <PageHeader
                     title="Dashboard"
-                    description="Tong hop nguoi dung, mon hoc, ky thi va cac tin hieu can theo doi trong he thong."
+                    description="Tổng hợp người dùng, môn học, kỳ thi và các tín hiệu cần theo dõi trong hệ thống."
                 />
             </motion.div>
 
             <motion.div variants={staggerItem} className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                <StatCard label="Tong nguoi dung" value={stats.totalUsers} icon={<Users className="h-5 w-5" />} accentColor="var(--color-accent)" />
-                <StatCard label="Giang vien" value={stats.totalLecturers} icon={<GraduationCap className="h-5 w-5" />} accentColor="var(--color-text-secondary)" />
-                <StatCard label="Ca thi dang mo" value={stats.activeSessions} icon={<FileText className="h-5 w-5" />} accentColor="var(--color-success)" />
-                <StatCard label="Can xem xet" value={stats.warnings} icon={<AlertTriangle className="h-5 w-5" />} accentColor="var(--color-warning)" />
+                <StatCard label="Tổng người dùng" value={stats.totalUsers} icon={<Users className="h-5 w-5" />} accentColor="var(--color-accent)" />
+                <StatCard label="Giảng viên" value={stats.totalLecturers} icon={<GraduationCap className="h-5 w-5" />} accentColor="var(--color-text-secondary)" />
+                <StatCard label="Ca thi đang mở" value={stats.activeSessions} icon={<FileText className="h-5 w-5" />} accentColor="var(--color-success)" />
+                <StatCard label="Cần xem xét" value={stats.warnings} icon={<AlertTriangle className="h-5 w-5" />} accentColor="var(--color-warning)" />
             </motion.div>
 
             {error && !data ? (
                 <motion.div variants={staggerItem}>
                     <InlineState
                         icon={<AlertCircle className="h-10 w-10" />}
-                        title="Khong the tai dashboard"
+                        title="Không thể tải dashboard"
                         description={error}
                         actions={(
                             <Button variant="secondary" icon={<RefreshCw className="h-4 w-4" />} onClick={() => void loadDashboard()}>
-                                Thu lai
+                                Thử lại
                             </Button>
                         )}
                     />
                 </motion.div>
             ) : !data ? (
                 <motion.div variants={staggerItem}>
-                    <InlineState title="Dang tai dashboard" description="ExamGuard dang tong hop du lieu he thong." />
+                    <InlineState title="Đang tải dashboard" description="ExamGuard đang tổng hợp dữ liệu hệ thống." />
                 </motion.div>
             ) : (
                 <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
@@ -209,12 +209,12 @@ export default function AdminDashboard() {
                     </motion.div>
 
                     <motion.div variants={staggerItem} className="space-y-4">
-                        <Panel title="Phan bo vai tro" description="Ty trong nguoi dung theo tung nhom quyen.">
+                        <Panel title="Phân bố vai trò" description="Tỷ trọng người dùng theo từng nhóm quyền.">
                             <div className="space-y-3">
                                 {[
                                     { label: 'Admin', count: data.users.filter((user) => user.role.toLowerCase() === 'admin').length, total: data.users.length, color: 'bg-text-primary' },
-                                    { label: 'Giang vien', count: stats.totalLecturers, total: data.users.length, color: 'bg-text-secondary' },
-                                    { label: 'Sinh vien', count: stats.totalStudents, total: data.users.length, color: 'bg-accent' },
+                                    { label: 'Giảng viên', count: stats.totalLecturers, total: data.users.length, color: 'bg-text-secondary' },
+                                    { label: 'Sinh viên', count: stats.totalStudents, total: data.users.length, color: 'bg-accent' },
                                 ].map((item) => (
                                     <div key={item.label}>
                                         <div className="mb-1.5 flex items-center justify-between text-xs">
@@ -232,7 +232,7 @@ export default function AdminDashboard() {
                             </div>
                         </Panel>
 
-                        <Panel title="Mon hoc noi bat" description="Danh sach mon hoc dang hoat dong gan day.">
+                        <Panel title="Môn học nổi bật" description="Danh sách môn học đang hoạt động gần đây.">
                             <div className="space-y-2">
                                 {data.subjects.slice(0, 4).map((subject) => (
                                     <div key={subject.id} className="flex items-center justify-between py-1.5">
@@ -249,7 +249,7 @@ export default function AdminDashboard() {
                         <Panel title="Attempt can xem xet" description="Cac bai lam co dau hieu can hau kiem.">
                             <div className="space-y-3">
                                 {data.flaggedAttempts.length === 0 ? (
-                                    <p className="text-sm text-text-muted">Chua co attempt bat thuong nao.</p>
+                                    <p className="text-sm text-text-muted">Chưa có attempt bất thường nào.</p>
                                 ) : data.flaggedAttempts.slice(0, 4).map((item) => (
                                     <div key={item.attempt.id} className="flex items-start gap-3 border-b border-border pb-3 last:border-b-0 last:pb-0">
                                         <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-warning/10">
@@ -258,7 +258,7 @@ export default function AdminDashboard() {
                                         <div className="min-w-0">
                                             <p className="text-sm font-medium text-text-primary">{item.attempt.studentName}</p>
                                             <p className="text-xs text-text-muted">{item.attempt.examTitle}</p>
-                                            <p className="mt-1 text-xs text-warning">{item.attempt.flagReason || 'Flagged by event logs'}</p>
+                                            <p className="mt-1 text-xs text-warning">{item.attempt.flagReason || 'Bị gắn cờ từ event log'}</p>
                                         </div>
                                     </div>
                                 ))}

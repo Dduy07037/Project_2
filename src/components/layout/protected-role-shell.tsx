@@ -50,7 +50,7 @@ export function ProtectedRoleShell({ role, children }: ProtectedRoleShellProps) 
     return (
       <FullscreenState
         icon={<ShieldCheck className="h-10 w-10" />}
-        title="Dang xac thuc phien lam viec"
+        title="Đang xác thực phiên làm việc"
         description="ExamGuard dang kiem tra thong tin dang nhap hien tai."
       />
     );
@@ -64,7 +64,7 @@ export function ProtectedRoleShell({ role, children }: ProtectedRoleShellProps) 
     return (
       <FullscreenState
         icon={<ShieldCheck className="h-10 w-10" />}
-        title="Dang xac thuc phien lam viec"
+        title="Đang xác thực phiên làm việc"
         description="ExamGuard dang tai thong tin tai khoan."
       />
     );
@@ -74,7 +74,7 @@ export function ProtectedRoleShell({ role, children }: ProtectedRoleShellProps) 
     return (
       <FullscreenState
         icon={<ShieldAlert className="h-10 w-10" />}
-        title="Dang chuyen huong"
+        title="Đang chuyển hướng"
         description="Ban khong co quyen truy cap khu vuc nay."
       />
     );

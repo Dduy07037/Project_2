@@ -16,6 +16,7 @@ import { DataTable } from '@/components/ui/table';
 import { useToast } from '@/components/ui/toast';
 import { useAuth } from '@/components/providers/auth-provider';
 import {
+    createCategory,
     createSubject,
     getSubjects,
     getUsers,
@@ -24,13 +25,23 @@ import {
     type UserDto,
 } from '@/lib/api/exam-guard';
 import { staggerContainer, staggerItem } from '@/lib/motion';
-import { AlertCircle, BookOpen, ClipboardList, FileText, Plus, RefreshCw } from 'lucide-react';
+import { AlertCircle, BookOpen, ClipboardList, FileText, FolderPlus, Plus, RefreshCw } from 'lucide-react';
+
+interface CreateCategoryForm {
+    subjectId: string;
+    name: string;
+}
 
 const emptySubjectForm: CreateSubjectRequest = {
     code: '',
     name: '',
     department: '',
     createdById: '',
+};
+
+const emptyCategoryForm: CreateCategoryForm = {
+    subjectId: '',
+    name: '',
 };
 
 export default function AdminSubjectsPage() {
@@ -43,8 +54,11 @@ export default function AdminSubjectsPage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [showCreateModal, setShowCreateModal] = useState(false);
+    const [showCreateCategoryModal, setShowCreateCategoryModal] = useState(false);
     const [submitting, setSubmitting] = useState(false);
+    const [creatingCategory, setCreatingCategory] = useState(false);
     const [createForm, setCreateForm] = useState<CreateSubjectRequest>(emptySubjectForm);
+    const [createCategoryForm, setCreateCategoryForm] = useState<CreateCategoryForm>(emptyCategoryForm);
 
     const loadPageData = useCallback(async () => {
         setLoading(true);
@@ -59,7 +73,7 @@ export default function AdminSubjectsPage() {
             setSubjects(subjectsResponse);
             setLecturers(lecturersResponse.items);
         } catch (loadError) {
-            setError(loadError instanceof Error ? loadError.message : 'Khong the tai du lieu mon hoc.');
+            setError(loadError instanceof Error ? loadError.message : 'Không thể tải dữ liệu môn học.');
         } finally {
             setLoading(false);
         }
@@ -91,6 +105,19 @@ export default function AdminSubjectsPage() {
         [lecturers],
     );
 
+    const subjectOptions = useMemo(
+        () => subjects.map((subject) => ({ value: subject.id, label: `${subject.code} - ${subject.name}` })),
+        [subjects],
+    );
+
+    const openCreateCategoryModal = useCallback((subjectId?: string) => {
+        setCreateCategoryForm({
+            subjectId: subjectId ?? (subjects.length === 1 ? subjects[0].id : ''),
+            name: '',
+        });
+        setShowCreateCategoryModal(true);
+    }, [subjects]);
+
     const handleCreateSubject = useCallback(async () => {
         if (!createForm.code?.trim() || !createForm.name?.trim()) {
             toast({ type: 'warning', title: 'Thieu thong tin', message: 'Can it nhat ma mon va ten mon hoc.' });
@@ -114,13 +141,40 @@ export default function AdminSubjectsPage() {
         } catch (createError) {
             toast({
                 type: 'error',
-                title: 'Tao mon hoc that bai',
+                title: 'Tạo môn học thất bại',
                 message: createError instanceof Error ? createError.message : 'Da xay ra loi khong xac dinh.',
             });
         } finally {
             setSubmitting(false);
         }
     }, [createForm, loadPageData, request, toast]);
+
+    const handleCreateCategory = useCallback(async () => {
+        if (!createCategoryForm.subjectId || !createCategoryForm.name.trim()) {
+            toast({ type: 'warning', title: 'Thieu thong tin', message: 'Can chon mon hoc va nhap ten category.' });
+            return;
+        }
+
+        setCreatingCategory(true);
+
+        try {
+            await createCategory(request, createCategoryForm.subjectId, {
+                name: createCategoryForm.name.trim(),
+            });
+
+            toast({ type: 'success', title: 'Đã tạo category mới' });
+            setShowCreateCategoryModal(false);
+            setCreateCategoryForm(emptyCategoryForm);
+        } catch (createError) {
+            toast({
+                type: 'error',
+                title: 'Tạo category thất bại',
+                message: createError instanceof Error ? createError.message : 'Da xay ra loi khong xac dinh.',
+            });
+        } finally {
+            setCreatingCategory(false);
+        }
+    }, [createCategoryForm, request, toast]);
 
     const columns = [
         {
@@ -134,11 +188,11 @@ export default function AdminSubjectsPage() {
         },
         {
             key: 'name',
-            title: 'Mon hoc',
+            title: 'Môn học',
             render: (subject: SubjectDto) => (
                 <div>
                     <p className="text-sm font-medium text-text-primary">{subject.name}</p>
-                    <p className="text-xs text-text-muted">{subject.department || 'Chua gan khoa/bo mon'}</p>
+                    <p className="text-xs text-text-muted">{subject.department || 'Chưa gắn khoa/bộ môn'}</p>
                 </div>
             ),
         },
@@ -149,7 +203,7 @@ export default function AdminSubjectsPage() {
         },
         {
             key: 'questionCount',
-            title: 'Ngan hang',
+            title: 'Ngân hàng',
             render: (subject: SubjectDto) => (
                 <span className="inline-flex items-center gap-1 text-sm text-text-secondary">
                     <ClipboardList className="h-3.5 w-3.5" />
@@ -159,7 +213,7 @@ export default function AdminSubjectsPage() {
         },
         {
             key: 'examCount',
-            title: 'Ky thi',
+            title: 'Kỳ thi',
             render: (subject: SubjectDto) => (
                 <span className="inline-flex items-center gap-1 text-sm text-text-secondary">
                     <FileText className="h-3.5 w-3.5" />
@@ -172,42 +226,106 @@ export default function AdminSubjectsPage() {
             title: 'Trang thai',
             render: (subject: SubjectDto) => <StatusBadge status={subject.isActive ? 'active' : 'disabled'} />,
         },
+        {
+            key: 'actions',
+            title: 'Tac vu',
+            render: (subject: SubjectDto) => (
+                <Button variant="ghost" size="sm" icon={<FolderPlus className="h-4 w-4" />} onClick={() => openCreateCategoryModal(subject.id)}>
+                    Tạo category
+                </Button>
+            ),
+        },
     ];
 
     return (
         <motion.div variants={staggerContainer} initial="initial" animate="enter" className="space-y-6">
             <motion.div variants={staggerItem}>
                 <PageHeader
-                    title="Quan ly mon hoc"
-                    description={`${subjects.length} mon hoc dang duoc doc tu SubjectsController`}
+                    title="Quản lý môn học"
+                    description={`${subjects.length} mon hoc tu SubjectsController. Admin tao subject, gan lecturer va mo category ngay tai day.`}
                     actions={(
-                        <Button icon={<Plus className="h-4 w-4" />} onClick={() => setShowCreateModal(true)}>
-                            Them mon hoc
-                        </Button>
+                        <div className="flex flex-wrap gap-2">
+                            <Button variant="secondary" icon={<FolderPlus className="h-4 w-4" />} onClick={() => openCreateCategoryModal()} disabled={subjects.length === 0}>
+                                Thêm category
+                            </Button>
+                            <Button icon={<Plus className="h-4 w-4" />} onClick={() => setShowCreateModal(true)}>
+                                Thêm môn học
+                            </Button>
+                        </div>
                     )}
                 />
             </motion.div>
 
             <motion.div variants={staggerItem} className="max-w-sm">
-                <SearchInput value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Tim ma mon, ten mon, giang vien..." />
+                <SearchInput value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Tìm mã môn, tên môn, giảng viên..." />
             </motion.div>
 
             <motion.div variants={staggerItem}>
                 {error ? (
                     <InlineState
                         icon={<AlertCircle className="h-10 w-10" />}
-                        title="Khong the tai mon hoc"
+                        title="Không thể tải môn học"
                         description={error}
                         actions={(
                             <Button variant="secondary" icon={<RefreshCw className="h-4 w-4" />} onClick={() => void loadPageData()}>
-                                Thu lai
+                                Thử lại
                             </Button>
                         )}
                     />
+                ) : !loading && subjects.length === 0 ? (
+                    <InlineState
+                        icon={<BookOpen className="h-10 w-10" />}
+                        title="Chưa có môn học nào"
+                        description="Tạo subject mới và gán CreatedById cho lecturer để mở tiếp luồng category, question và exam."
+                    />
                 ) : (
-                    <DataTable columns={columns} data={filteredSubjects} loading={loading} emptyMessage="Khong co mon hoc nao phu hop bo loc hien tai." />
+                    <DataTable columns={columns} data={filteredSubjects} getRowId={(item) => item.id} loading={loading} emptyMessage="Không có môn học nào phù hợp bộ lọc hiện tại." />
                 )}
             </motion.div>
+
+            <Modal
+                open={showCreateCategoryModal}
+                onClose={() => {
+                    if (!creatingCategory) {
+                        setShowCreateCategoryModal(false);
+                    }
+                }}
+                title="Thêm category mới"
+                description="Admin tạo category để mở question bank cho lecturer trong đúng subject."
+                size="md"
+            >
+                {subjects.length === 0 ? (
+                    <InlineState
+                        icon={<BookOpen className="h-8 w-8" />}
+                        title="Chưa có môn học để tạo category"
+                        description="Hãy tạo subject trước, sau đó quay lại modal này để gắn category cho đúng môn học."
+                    />
+                ) : (
+                    <div className="space-y-4">
+                        <Select
+                            label="Môn học"
+                            value={createCategoryForm.subjectId}
+                            onChange={(value) => setCreateCategoryForm((current) => ({ ...current, subjectId: value }))}
+                            options={subjectOptions}
+                            disabled={creatingCategory}
+                        />
+                        <Input
+                            label="Tên category"
+                            value={createCategoryForm.name}
+                            onChange={(event) => setCreateCategoryForm((current) => ({ ...current, name: event.target.value }))}
+                            placeholder="VD: SQL can ban"
+                        />
+                        <div className="flex justify-end gap-2 pt-2">
+                            <Button variant="ghost" onClick={() => setShowCreateCategoryModal(false)} disabled={creatingCategory}>
+                                Hủy
+                            </Button>
+                            <Button onClick={() => void handleCreateCategory()} loading={creatingCategory} icon={<FolderPlus className="h-4 w-4" />}>
+                                Tạo category
+                            </Button>
+                        </div>
+                    </div>
+                )}
+            </Modal>
 
             <Modal
                 open={showCreateModal}
@@ -216,8 +334,8 @@ export default function AdminSubjectsPage() {
                         setShowCreateModal(false);
                     }
                 }}
-                title="Them mon hoc moi"
-                description="Mon hoc se duoc tao truc tiep tren backend that."
+                title="Thêm môn học mới"
+                description="Môn học sẽ được tạo trực tiếp trên backend và có thể gán ngay cho lecturer phụ trách."
                 size="md"
             >
                 <div className="space-y-4">
@@ -228,10 +346,10 @@ export default function AdminSubjectsPage() {
                         placeholder="CS101"
                     />
                     <Input
-                        label="Ten mon hoc"
+                        label="Tên môn học"
                         value={createForm.name}
                         onChange={(event) => setCreateForm((current) => ({ ...current, name: event.target.value }))}
-                        placeholder="Nhap mon Lap trinh"
+                        placeholder="Nhập môn Lập trình"
                     />
                     <Input
                         label="Don vi"
@@ -240,17 +358,17 @@ export default function AdminSubjectsPage() {
                         placeholder="Khoa CNTT"
                     />
                     <Select
-                        label="Giang vien phu trach"
+                        label="Giảng viên phụ trách"
                         value={createForm.createdById ?? ''}
                         onChange={(value) => setCreateForm((current) => ({ ...current, createdById: value }))}
                         options={lecturerOptions}
                     />
                     <div className="flex justify-end gap-2 pt-2">
                         <Button variant="ghost" onClick={() => setShowCreateModal(false)} disabled={submitting}>
-                            Huy
+                            Hủy
                         </Button>
                         <Button onClick={() => void handleCreateSubject()} loading={submitting} icon={<BookOpen className="h-4 w-4" />}>
-                            Tao mon hoc
+                            Tạo môn học
                         </Button>
                     </div>
                 </div>

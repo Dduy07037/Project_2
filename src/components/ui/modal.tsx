@@ -52,10 +52,12 @@ export function Modal({
     lg: 'max-w-3xl',
   };
 
+  const hasHeader = Boolean(title || description);
+
   return (
     <AnimatePresence>
       {open && (
-        <div className="fixed inset-0 z-[var(--z-modal)] flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[var(--z-modal)] flex items-start justify-center overflow-y-auto p-4 sm:p-6">
           <motion.button
             type="button"
             initial={{ opacity: 0 }}
@@ -71,12 +73,12 @@ export function Modal({
             animate="enter"
             exit="exit"
             className={cn(
-              'surface-panel relative z-10 w-full overflow-hidden rounded-[var(--radius-xl)]',
+              'surface-panel relative z-10 my-auto flex w-full max-h-[calc(100vh-2rem)] flex-col overflow-hidden rounded-[var(--radius-xl)] sm:max-h-[calc(100vh-3rem)]',
               sizes[size],
             )}
           >
-            {(title || description) && (
-              <div className="flex items-start justify-between gap-4 border-b border-border-subtle px-6 py-5">
+            {hasHeader && (
+              <div className="sticky top-0 z-10 flex shrink-0 items-start justify-between gap-4 border-b border-border-subtle bg-bg-primary px-6 py-5">
                 <div className="space-y-1">
                   {title && <h3 className="text-lg font-semibold text-text-primary">{title}</h3>}
                   {description && <p className="text-sm text-text-muted">{description}</p>}
@@ -91,7 +93,9 @@ export function Modal({
                 </Button>
               </div>
             )}
-            <div className="p-6">{children}</div>
+            <div className={cn('min-h-0 overflow-y-auto p-6', !hasHeader && 'pt-5')}>
+              {children}
+            </div>
           </motion.div>
         </div>
       )}
@@ -116,7 +120,7 @@ export function ConfirmDialog({
   title,
   message,
   confirmText = 'Xac nhan',
-  cancelText = 'Huy',
+  cancelText = 'Hủy',
 }: ConfirmDialogProps) {
   return (
     <Modal open={open} onClose={onClose} title={title} size="sm">

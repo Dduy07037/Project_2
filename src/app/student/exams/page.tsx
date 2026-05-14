@@ -31,7 +31,7 @@ export default function StudentExamsPage() {
             const response = await getAvailableSessions(request);
             setSessions(response);
         } catch (loadError) {
-            setError(loadError instanceof Error ? loadError.message : 'Khong the tai ca thi kha dung.');
+            setError(loadError instanceof Error ? loadError.message : 'Không thể tải ca thi khả dụng.');
         } finally {
             setLoading(false);
         }
@@ -49,25 +49,25 @@ export default function StudentExamsPage() {
     return (
         <motion.div variants={staggerContainer} initial="initial" animate="enter" className="space-y-6">
             <motion.div variants={staggerItem}>
-                <PageHeader title="Ca thi kha dung" description="Danh sach session duoc mo cho sinh vien, bao gom ca thi sap dien ra va ca thi dang mo." />
+                <PageHeader title="Ca thi khả dụng" description="Danh sách session được mở cho sinh viên, bao gồm ca thi sắp diễn ra và ca thi đang mở." />
             </motion.div>
 
             <motion.div variants={staggerItem} className="grid gap-4">
                 {error ? (
                     <InlineState
                         icon={<AlertCircle className="h-10 w-10" />}
-                        title="Khong the tai ca thi"
+                        title="Không thể tải ca thi"
                         description={error}
                         actions={(
                             <Button variant="secondary" icon={<RefreshCw className="h-4 w-4" />} onClick={() => void loadSessions()}>
-                                Thu lai
+                                Thử lại
                             </Button>
                         )}
                     />
                 ) : loading && sessions.length === 0 ? (
-                    <InlineState title="Dang tai ca thi" description="ExamGuard dang doc sessions duoc mo cho sinh vien." />
+                    <InlineState title="Đang tải ca thi" description="ExamGuard đang đọc sessions được mở cho sinh viên." />
                 ) : groupedSessions.length === 0 ? (
-                    <InlineState title="Khong co ca thi kha dung" description="Hien tai khong co session nao dang mo hoac sap dien ra." />
+                    <InlineState title="Không có ca thi khả dụng" description="Hiện tại không có session nào đang mở hoặc sắp diễn ra." />
                 ) : groupedSessions.map((session) => {
                     const statusKey = toStatusKey(session.status);
                     const canStart = statusKey === 'active' && (!session.attemptStatus || toStatusKey(session.attemptStatus) === 'in_progress');
@@ -90,13 +90,13 @@ export default function StudentExamsPage() {
                                     <p className="mb-3 text-sm text-text-muted">{session.examDescription || session.subjectName}</p>
                                     <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-text-secondary">
                                         <span className="flex items-center gap-1"><Clock className="h-3.5 w-3.5" /> {formatDuration(session.durationMinutes)}</span>
-                                        <span className="flex items-center gap-1"><Shuffle className="h-3.5 w-3.5" /> {session.shuffleQuestions ? 'Tron cau hoi' : 'Thu tu co dinh'}</span>
+                                        <span className="flex items-center gap-1"><Shuffle className="h-3.5 w-3.5" /> {session.shuffleQuestions ? 'Trộn câu hỏi' : 'Thứ tự cố định'}</span>
                                         <span className="flex items-center gap-1">
                                             {session.showResultToStudent ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
-                                            {session.showResultToStudent ? 'Co xem ket qua' : 'An ket qua'}
+                                            {session.showResultToStudent ? 'Có xem kết quả' : 'Ẩn kết quả'}
                                         </span>
                                         {session.requiresPassword && (
-                                            <span className="flex items-center gap-1"><Lock className="h-3.5 w-3.5" /> Co mat khau</span>
+                                            <span className="flex items-center gap-1"><Lock className="h-3.5 w-3.5" /> Có mật khẩu</span>
                                         )}
                                     </div>
                                     <div className="mt-3 flex items-center justify-between gap-4 rounded-[var(--radius-md)] border border-border-subtle bg-bg-tertiary p-3">
@@ -115,7 +115,7 @@ export default function StudentExamsPage() {
                                             </Link>
                                         ) : (
                                             <Button size="sm" variant="secondary" disabled>
-                                                {hasCompletedAttempt ? 'Da hoan thanh' : 'Chua den gio'}
+                                                {hasCompletedAttempt ? 'Đã hoàn thành' : 'Chưa đến giờ'}
                                             </Button>
                                         )}
                                     </div>

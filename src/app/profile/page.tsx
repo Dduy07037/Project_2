@@ -37,8 +37,8 @@ function ProfileContent() {
     if (!currentPassword || !newPassword || !confirmPassword) {
       toast({
         type: 'warning',
-        title: 'Thieu thong tin',
-        message: 'Vui long nhap day du cac truong doi mat khau.',
+        title: 'Thiếu thông tin',
+        message: 'Vui lòng nhập đầy đủ các trường đổi mật khẩu.',
       });
       return;
     }
@@ -46,8 +46,8 @@ function ProfileContent() {
     if (newPassword !== confirmPassword) {
       toast({
         type: 'error',
-        title: 'Xac nhan chua khop',
-        message: 'Mat khau moi va xac nhan mat khau phai trung nhau.',
+        title: 'Xác nhận chưa khớp',
+        message: 'Mật khẩu mới và xác nhận mật khẩu phải trùng nhau.',
       });
       return;
     }
@@ -63,11 +63,11 @@ function ProfileContent() {
       const message =
         error instanceof ApiError
           ? error.message
-          : 'Khong the doi mat khau luc nay.';
+          : 'Không thể đổi mật khẩu lúc này.';
 
       toast({
         type: 'error',
-        title: 'Doi mat khau that bai',
+        title: 'Đổi mật khẩu thất bại',
         message,
       });
     } finally {
@@ -83,8 +83,8 @@ function ProfileContent() {
     <motion.div variants={staggerContainer} initial="initial" animate="enter" className="space-y-6">
       <motion.div variants={staggerItem}>
         <PageHeader
-          title="Ho so ca nhan"
-          description="Thong tin dang duoc dong bo truc tiep tu phien dang nhap hien tai."
+          title="Hồ sơ cá nhân"
+          description="Thông tin đang được đồng bộ trực tiếp từ phiên đăng nhập hiện tại."
         />
       </motion.div>
 
@@ -113,12 +113,12 @@ function ProfileContent() {
                     {user.role === 'admin'
                       ? 'Admin'
                       : user.role === 'lecturer'
-                        ? 'Giang vien'
-                        : 'Sinh vien'}
+                        ? 'Giảng viên'
+                        : 'Sinh viên'}
                   </Badge>
                   {session?.concurrentSessionDetected && (
                     <Badge variant="warning">
-                      {session.activeSessionCount} phien dang hoat dong
+                      {session.activeSessionCount} phiên đang hoạt động
                     </Badge>
                   )}
                 </div>
@@ -126,19 +126,19 @@ function ProfileContent() {
             </div>
             <div className="grid gap-3 text-sm text-text-secondary sm:grid-cols-2 md:min-w-[280px]">
               <div className="rounded-[var(--radius-lg)] border border-border-subtle bg-bg-tertiary p-4">
-                <p className="text-xs text-text-muted">Vai tro</p>
+                <p className="text-xs text-text-muted">Vai trò</p>
                 <p className="mt-1 font-medium text-text-primary">
                   {user.role === 'admin'
-                    ? 'Quan tri vien'
+                    ? 'Quản trị viên'
                     : user.role === 'lecturer'
-                      ? 'Giang vien'
-                      : 'Sinh vien'}
+                      ? 'Giảng viên'
+                      : 'Sinh viên'}
                 </p>
               </div>
               <div className="rounded-[var(--radius-lg)] border border-border-subtle bg-bg-tertiary p-4">
                 <p className="text-xs text-text-muted">Session ID</p>
                 <p className="mt-1 font-mono text-[12px] text-text-primary">
-                  {session?.sessionId ?? 'Khong co'}
+                  {session?.sessionId ?? 'Không có'}
                 </p>
               </div>
             </div>
@@ -148,31 +148,31 @@ function ProfileContent() {
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1.4fr)_minmax(320px,1fr)]">
         <motion.div variants={staggerItem}>
-          <Panel title="Thong tin tai khoan" description="Thong tin chi doc tu he thong">
+          <Panel title="Thông tin tài khoản" description="Thông tin chỉ đọc từ hệ thống">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <Input label="Ho va ten" value={user.fullName} disabled icon={<UserRound className="h-4 w-4" />} />
+              <Input label="Họ và tên" value={user.fullName} disabled icon={<UserRound className="h-4 w-4" />} />
               <Input label="Email" value={user.email} disabled icon={<Mail className="h-4 w-4" />} />
               <Input
-                label="Vai tro"
+                label="Vai trò"
                 value={
                   user.role === 'admin'
-                    ? 'Quan tri vien'
+                    ? 'Quản trị viên'
                     : user.role === 'lecturer'
-                      ? 'Giang vien'
-                      : 'Sinh vien'
+                      ? 'Giảng viên'
+                      : 'Sinh viên'
                 }
                 disabled
                 icon={<Shield className="h-4 w-4" />}
               />
               <Input
-                label="Khoa / Bo mon"
-                value={user.department || 'Chua co du lieu'}
+                label="Khoa / Bộ môn"
+                value={user.department || 'Chưa có dữ liệu'}
                 disabled
                 icon={<Building2 className="h-4 w-4" />}
               />
               {user.studentCode && (
                 <Input
-                  label="Ma sinh vien"
+                  label="Mã sinh viên"
                   value={user.studentCode}
                   disabled
                   icon={<UserRound className="h-4 w-4" />}
@@ -192,8 +192,8 @@ function ProfileContent() {
 
         <motion.div variants={staggerItem}>
           <Panel
-            title="Doi mat khau"
-            description="Sau khi doi mat khau, phien hien tai se bi thu hoi"
+            title="Đổi mật khẩu"
+            description="Sau khi đổi mật khẩu, phiên hiện tại sẽ bị thu hồi"
             action={
               <Button
                 size="sm"
@@ -201,31 +201,31 @@ function ProfileContent() {
                 onClick={() => void handleChangePassword()}
                 loading={savingPassword}
               >
-                Cap nhat
+                Cập nhật
               </Button>
             }
           >
             <div className="space-y-4">
               <Input
-                label="Mat khau hien tai"
+                label="Mật khẩu hiện tại"
                 type="password"
                 value={currentPassword}
                 onChange={(event) => setCurrentPassword(event.target.value)}
-                placeholder="Nhap mat khau hien tai"
+                placeholder="Nhập mật khẩu hiện tại"
               />
               <Input
-                label="Mat khau moi"
+                label="Mật khẩu mới"
                 type="password"
                 value={newPassword}
                 onChange={(event) => setNewPassword(event.target.value)}
-                placeholder="Nhap mat khau moi"
+                placeholder="Nhập mật khẩu mới"
               />
               <Input
-                label="Xac nhan mat khau moi"
+                label="Xác nhận mật khẩu mới"
                 type="password"
                 value={confirmPassword}
                 onChange={(event) => setConfirmPassword(event.target.value)}
-                placeholder="Nhap lai mat khau moi"
+                placeholder="Nhập lại mật khẩu mới"
               />
             </div>
           </Panel>

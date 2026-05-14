@@ -7,7 +7,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **project_code** (2022 symbols, 4938 relationships, 170 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **Project_2** (2316 symbols, 5904 relationships, 196 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
 
@@ -30,10 +30,10 @@ This project is indexed by GitNexus as **project_code** (2022 symbols, 4938 rela
 
 | Resource | Use for |
 |----------|---------|
-| `gitnexus://repo/project_code/context` | Codebase overview, check index freshness |
-| `gitnexus://repo/project_code/clusters` | All functional areas |
-| `gitnexus://repo/project_code/processes` | All execution flows |
-| `gitnexus://repo/project_code/process/{name}` | Step-by-step execution trace |
+| `gitnexus://repo/Project_2/context` | Codebase overview, check index freshness |
+| `gitnexus://repo/Project_2/clusters` | All functional areas |
+| `gitnexus://repo/Project_2/processes` | All execution flows |
+| `gitnexus://repo/Project_2/process/{name}` | Step-by-step execution trace |
 
 ## CLI
 

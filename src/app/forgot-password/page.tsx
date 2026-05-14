@@ -48,7 +48,7 @@ export default function ForgotPasswordPage() {
             <div className="flex flex-wrap gap-3">
               <Link href="/login">
                 <Button variant="secondary" icon={<ArrowLeft className="h-4 w-4" />}>
-                  Quay lai dang nhap
+                  Quay lại đăng nhập
                 </Button>
               </Link>
             </div>

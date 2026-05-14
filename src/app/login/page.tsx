@@ -58,12 +58,12 @@ function LoginPageContent() {
       const message =
         caughtError instanceof ApiError
           ? caughtError.message
-          : 'Khong the dang nhap vao he thong luc nay.';
+          : 'Không thể đăng nhập vào hệ thống lúc này.';
 
       setError(message);
       toast({
         type: 'error',
-        title: 'Dang nhap that bai',
+        title: 'Đăng nhập thất bại',
         message,
       });
     } finally {
@@ -145,7 +145,7 @@ function LoginPageContent() {
               <div className="space-y-2">
                 <p className="text-sm font-medium text-text-primary">Operational note</p>
                 <p className="text-sm leading-6 text-text-muted">
-                  He thong su dung du lieu that tu backend hien tai. UI layer moi khong
+                  Hệ thống sử dụng dữ liệu thật từ backend hiện tại. UI layer mới không
                   thay doi auth contract, role contract, hay data flow dang chay.
                 </p>
               </div>
@@ -173,14 +173,14 @@ function LoginPageContent() {
               <div className="space-y-2">
                 <div className="flex items-center gap-2">
                   <Badge variant="secondary">He thong san sang</Badge>
-                  {status === 'loading' && <Badge variant="info">Dang phuc hoi session</Badge>}
+                  {status === 'loading' && <Badge variant="info">Đang phục hồi session</Badge>}
                 </div>
                 <h2 className="text-[28px] font-semibold tracking-[-0.05em] text-text-primary">
-                  Dang nhap
+                  Đăng nhập
                 </h2>
                 <p className="text-sm leading-6 text-text-muted">
                   Dung email va mat khau da ton tai tren backend. He thong se tu dong
-                  dua ban den dung workspace theo role hien co.
+                  đưa bạn đến đúng workspace theo role hiện có.
                 </p>
               </div>
             </motion.div>
@@ -198,11 +198,11 @@ function LoginPageContent() {
 
               <div className="relative">
                 <Input
-                  label="Mat khau"
+                  label="Mật khẩu"
                   type={showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
-                  placeholder="Nhap mat khau"
+                  placeholder="Nhập mật khẩu"
                   autoComplete="current-password"
                   required
                   error={error ?? undefined}
@@ -219,7 +219,7 @@ function LoginPageContent() {
               <div className="flex items-center justify-between gap-4">
                 <p className="text-xs text-text-muted">
                   {status === 'loading'
-                    ? 'Dang kiem tra phien dang nhap hien tai.'
+                    ? 'Đang kiểm tra phiên đăng nhập hiện tại.'
                     : 'Role se duoc xac dinh tu token that sau khi dang nhap.'}
                 </p>
                 <Link
@@ -236,7 +236,7 @@ function LoginPageContent() {
                 loading={loading}
                 iconRight={<ArrowRight className="h-4 w-4" />}
               >
-                Dang nhap
+                Đăng nhập
               </Button>
             </motion.form>
           </div>

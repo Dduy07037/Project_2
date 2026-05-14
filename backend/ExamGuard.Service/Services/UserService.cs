@@ -6,11 +6,16 @@ using ExamGuard.Core.Interfaces;
 using ExamGuard.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using System.Text.RegularExpressions;
 
 namespace ExamGuard.Service.Services;
 
 public class UserService : IUserService
 {
+    private static readonly Regex EmailPattern = new(
+        @"^[^\s@]+@[^\s@]+\.[^\s@]+$",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
     private readonly AppDbContext _db;
     private readonly ILogger<UserService> _logger;
 
@@ -66,8 +71,13 @@ public class UserService : IUserService
 
     public async Task<UserDto> CreateUserAsync(CreateUserRequest request)
     {
-        if (await _db.Users.AnyAsync(u => u.Email == request.Email))
-            throw new ConflictException($"Email '{request.Email}' is already in use.");
+        var normalizedEmail = NormalizeEmail(request.Email);
+
+        if (!EmailPattern.IsMatch(normalizedEmail))
+            throw new AppException("Email không đúng định dạng.");
+
+        if (await _db.Users.AnyAsync(u => u.Email == normalizedEmail))
+            throw new ConflictException($"Email '{normalizedEmail}' is already in use.");
 
         if (!Enum.TryParse<UserRole>(request.Role, true, out var role))
             throw new AppException($"Role '{request.Role}' is invalid. Use Admin, Lecturer, or Student.");
@@ -78,7 +88,7 @@ public class UserService : IUserService
         var user = new User
         {
             Id = Guid.NewGuid(),
-            Email = request.Email.Trim().ToLowerInvariant(),
+            Email = normalizedEmail,
             PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password),
             FullName = request.FullName.Trim(),
             Role = role,
@@ -165,4 +175,6 @@ public class UserService : IUserService
         LastLoginAt = user.LastLoginAt,
         CreatedAt = user.CreatedAt
     };
+
+    private static string NormalizeEmail(string email) => email.Trim().ToLowerInvariant();
 }

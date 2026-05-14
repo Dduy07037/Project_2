@@ -48,34 +48,34 @@ const adminNav: SidebarGroup[] = [
     ],
   },
   {
-    title: 'Quan ly',
+    title: 'Quản lý',
     items: [
       {
         id: 'users',
-        label: 'Nguoi dung',
+        label: 'Người dùng',
         href: '/admin/users',
         icon: <Users className="h-4 w-4" />,
       },
       {
         id: 'subjects',
-        label: 'Mon hoc',
+        label: 'Môn học',
         href: '/admin/subjects',
         icon: <BookOpen className="h-4 w-4" />,
       },
     ],
   },
   {
-    title: 'He thong',
+    title: 'Hệ thống',
     items: [
       {
         id: 'activity',
-        label: 'Hoat dong',
+        label: 'Hoạt động',
         href: '/admin/activity',
         icon: <Activity className="h-4 w-4" />,
       },
       {
         id: 'settings',
-        label: 'Cau hinh',
+        label: 'Cấu hình',
         href: '/admin/settings',
         icon: <Settings className="h-4 w-4" />,
       },
@@ -95,22 +95,22 @@ const lecturerNav: SidebarGroup[] = [
     ],
   },
   {
-    title: 'Noi dung',
+    title: 'Nội dung',
     items: [
       {
         id: 'questions',
-        label: 'Ngan hang cau hoi',
+        label: 'Ngân hàng câu hỏi',
         href: '/lecturer/questions',
         icon: <ClipboardList className="h-4 w-4" />,
       },
     ],
   },
   {
-    title: 'Ky thi',
+    title: 'Kỳ thi',
     items: [
       {
         id: 'exams',
-        label: 'Quan ly ky thi',
+        label: 'Quản lý kỳ thi',
         href: '/lecturer/exams',
         icon: <BookOpen className="h-4 w-4" />,
       },
@@ -136,17 +136,17 @@ const studentNav: SidebarGroup[] = [
     ],
   },
   {
-    title: 'Thi cu',
+    title: 'Thi cử',
     items: [
       {
         id: 'exams',
-        label: 'Ca thi kha dung',
+        label: 'Ca thi khả dụng',
         href: '/student/exams',
         icon: <GraduationCap className="h-4 w-4" />,
       },
       {
         id: 'history',
-        label: 'Lich su thi',
+        label: 'Lịch sử thi',
         href: '/student/history',
         icon: <History className="h-4 w-4" />,
       },
@@ -188,9 +188,9 @@ export function Sidebar({
   const navGroups = getNavForRole(role);
 
   const roleLabels = {
-    admin: 'Quan tri vien',
-    lecturer: 'Giang vien',
-    student: 'Sinh vien',
+    admin: 'Quản trị viên',
+    lecturer: 'Giảng viên',
+    student: 'Sinh viên',
   };
 
   function renderSidebarBody(isMobile = false) {
@@ -203,7 +203,7 @@ export function Sidebar({
           {(!collapsed || isMobile) && (
             <div className="min-w-0">
               <p className="text-sm font-semibold text-text-primary">ExamGuard</p>
-              <p className="text-xs text-text-muted">Examination operations</p>
+              <p className="text-xs text-text-muted">Điều hành thi cử</p>
             </div>
           )}
         </div>
@@ -281,7 +281,7 @@ export function Sidebar({
               ) : (
                 <ChevronLeft className="h-4 w-4" />
               )}
-              {!collapsed && <span>Thu gon</span>}
+              {!collapsed && <span>Thu gọn</span>}
             </button>
           )}
         </div>
@@ -299,7 +299,7 @@ export function Sidebar({
         {renderSidebarBody()}
       </motion.aside>
 
-      <Drawer open={mobileOpen} onClose={onCloseMobile} side="left" title="Navigation">
+      <Drawer open={mobileOpen} onClose={onCloseMobile} side="left" title="Điều hướng">
         {renderSidebarBody(true)}
       </Drawer>
     </>

@@ -14,6 +14,30 @@ namespace ExamGuard.Data.Seed;
 
 public static class DataSeeder
 {
+    private static readonly Guid DemoAdminId = Guid.Parse("a1000000-0000-0000-0000-000000000001");
+    private static readonly Guid DemoLecturerId = Guid.Parse("a2000000-0000-0000-0000-000000000002");
+    private static readonly Guid DemoLecturerId2 = Guid.Parse("a3000000-0000-0000-0000-000000000003");
+    private static readonly Guid DemoStudentId = Guid.Parse("a4000000-0000-0000-0000-000000000004");
+    private static readonly Guid DemoStudentId2 = Guid.Parse("a5000000-0000-0000-0000-000000000005");
+    private static readonly Guid DemoStudentId3 = Guid.Parse("a6000000-0000-0000-0000-000000000006");
+    private static readonly Guid DemoStudentId4 = Guid.Parse("a7000000-0000-0000-0000-000000000007");
+    private static readonly Guid DemoStudentId5 = Guid.Parse("a8000000-0000-0000-0000-000000000008");
+
+    private static readonly Guid DemoSubjectProgrammingId = Guid.Parse("b1000000-0000-0000-0000-000000000001");
+    private static readonly Guid DemoSubjectAlgorithmsId = Guid.Parse("b2000000-0000-0000-0000-000000000002");
+    private static readonly Guid DemoSubjectDatabaseId = Guid.Parse("b3000000-0000-0000-0000-000000000003");
+
+    private static readonly Guid DemoCategoryVariablesId = Guid.Parse("c1000000-0000-0000-0000-000000000001");
+    private static readonly Guid DemoCategoryControlFlowId = Guid.Parse("c2000000-0000-0000-0000-000000000002");
+    private static readonly Guid DemoCategoryRecursionId = Guid.Parse("c3000000-0000-0000-0000-000000000003");
+    private static readonly Guid DemoCategoryArraysId = Guid.Parse("c4000000-0000-0000-0000-000000000004");
+    private static readonly Guid DemoCategoryPointersId = Guid.Parse("c5000000-0000-0000-0000-000000000005");
+    private static readonly Guid DemoCategoryLinkedListId = Guid.Parse("c6000000-0000-0000-0000-000000000006");
+    private static readonly Guid DemoCategoryStackQueueId = Guid.Parse("c7000000-0000-0000-0000-000000000007");
+    private static readonly Guid DemoCategoryBinaryTreeId = Guid.Parse("c8000000-0000-0000-0000-000000000008");
+    private static readonly Guid DemoCategoryRelationalModelId = Guid.Parse("c9000000-0000-0000-0000-000000000009");
+    private static readonly Guid DemoCategorySqlId = Guid.Parse("ca000000-0000-0000-0000-00000000000a");
+
     public static async Task SeedAsync(IServiceProvider serviceProvider)
     {
         using var scope = serviceProvider.CreateScope();
@@ -43,7 +67,7 @@ public static class DataSeeder
             }
 
             var seedDemoData = environment.IsDevelopment() || configuration.GetValue<bool>("Seed:DemoData");
-            if (!await context.Users.AnyAsync() && seedDemoData)
+            if (seedDemoData)
             {
                 var demoPassword = configuration["Seed:DemoPassword"];
                 if (string.IsNullOrWhiteSpace(demoPassword))
@@ -54,11 +78,16 @@ public static class DataSeeder
                     demoPassword = "Password123!";
                 }
 
-                await SeedUsers(context, demoPassword);
-                await SeedSubjectsAndCategories(context);
-                await SeedQuestions(context);
-                await context.SaveChangesAsync();
-                logger.LogInformation("Demo seed data inserted successfully.");
+                var demoSeedChanged = await EnsureDemoDataAsync(context, demoPassword);
+                if (demoSeedChanged)
+                {
+                    await context.SaveChangesAsync();
+                    logger.LogInformation("Demo seed data ensured successfully.");
+                }
+                else
+                {
+                    logger.LogInformation("Demo seed data already present. Skipping demo upsert.");
+                }
             }
             else if (!await context.Users.AnyAsync())
             {
@@ -66,7 +95,7 @@ public static class DataSeeder
             }
             else
             {
-                logger.LogInformation("Database already seeded. Skipping relational seed.");
+                logger.LogInformation("Demo seed disabled. Existing relational data kept as-is.");
             }
         }
         catch (Exception ex)
@@ -76,6 +105,15 @@ public static class DataSeeder
         }
 
         await TrySeedNeo4jAsync(scope.ServiceProvider, context);
+    }
+
+    private static async Task<bool> EnsureDemoDataAsync(AppDbContext context, string password)
+    {
+        var usersChanged = await SeedUsers(context, password);
+        var subjectsChanged = await SeedSubjectsAndCategories(context);
+        var questionsChanged = await SeedQuestions(context);
+
+        return usersChanged || subjectsChanged || questionsChanged;
     }
 
     private static async Task TrySeedNeo4jAsync(IServiceProvider scopedProvider, AppDbContext context)
@@ -180,99 +218,140 @@ public static class DataSeeder
         }
     }
 
-    private static async Task SeedUsers(AppDbContext context, string password)
+    private static async Task<bool> SeedUsers(AppDbContext context, string password)
     {
         var passwordHash = BCrypt.Net.BCrypt.HashPassword(password);
 
         var users = new List<User>
         {
-            new() { Id = Guid.Parse("a1000000-0000-0000-0000-000000000001"), Email = "admin@hcmut.edu.vn", PasswordHash = passwordHash, FullName = "Nguyễn Văn Quản Trị", Role = UserRole.Admin, Department = "CNTT" },
-            new() { Id = Guid.Parse("a2000000-0000-0000-0000-000000000002"), Email = "lecturer1@hcmut.edu.vn", PasswordHash = passwordHash, FullName = "Trần Thị Minh Anh", Role = UserRole.Lecturer, Department = "Khoa CNTT" },
-            new() { Id = Guid.Parse("a3000000-0000-0000-0000-000000000003"), Email = "lecturer2@hcmut.edu.vn", PasswordHash = passwordHash, FullName = "Lê Hoàng Phúc", Role = UserRole.Lecturer, Department = "Khoa CNTT" },
-            new() { Id = Guid.Parse("a4000000-0000-0000-0000-000000000004"), Email = "sv001@student.hcmut.edu.vn", PasswordHash = passwordHash, FullName = "Phạm Đức Duy", Role = UserRole.Student, StudentCode = "2112001", Department = "CNTT" },
-            new() { Id = Guid.Parse("a5000000-0000-0000-0000-000000000005"), Email = "sv002@student.hcmut.edu.vn", PasswordHash = passwordHash, FullName = "Ngô Thanh Hằng", Role = UserRole.Student, StudentCode = "2112002", Department = "CNTT" },
-            new() { Id = Guid.Parse("a6000000-0000-0000-0000-000000000006"), Email = "sv003@student.hcmut.edu.vn", PasswordHash = passwordHash, FullName = "Võ Minh Khôi", Role = UserRole.Student, StudentCode = "2112003", Department = "CNTT" },
-            new() { Id = Guid.Parse("a7000000-0000-0000-0000-000000000007"), Email = "sv004@student.hcmut.edu.vn", PasswordHash = passwordHash, FullName = "Hoàng Thị Lan", Role = UserRole.Student, StudentCode = "2112004", Department = "CNTT", Status = UserStatus.Disabled },
-            new() { Id = Guid.Parse("a8000000-0000-0000-0000-000000000008"), Email = "sv005@student.hcmut.edu.vn", PasswordHash = passwordHash, FullName = "Đặng Quốc Bảo", Role = UserRole.Student, StudentCode = "2112005", Department = "CNTT" },
+            new() { Id = DemoAdminId, Email = "admin@hcmut.edu.vn", PasswordHash = passwordHash, FullName = "Nguyễn Văn Quản Trị", Role = UserRole.Admin, Department = "CNTT" },
+            new() { Id = DemoLecturerId, Email = "lecturer1@hcmut.edu.vn", PasswordHash = passwordHash, FullName = "Trần Thị Minh Anh", Role = UserRole.Lecturer, Department = "Khoa CNTT" },
+            new() { Id = DemoLecturerId2, Email = "lecturer2@hcmut.edu.vn", PasswordHash = passwordHash, FullName = "Lê Hoàng Phúc", Role = UserRole.Lecturer, Department = "Khoa CNTT" },
+            new() { Id = DemoStudentId, Email = "sv001@student.hcmut.edu.vn", PasswordHash = passwordHash, FullName = "Phạm Đức Duy", Role = UserRole.Student, StudentCode = "2112001", Department = "CNTT" },
+            new() { Id = DemoStudentId2, Email = "sv002@student.hcmut.edu.vn", PasswordHash = passwordHash, FullName = "Ngô Thanh Hằng", Role = UserRole.Student, StudentCode = "2112002", Department = "CNTT" },
+            new() { Id = DemoStudentId3, Email = "sv003@student.hcmut.edu.vn", PasswordHash = passwordHash, FullName = "Võ Minh Khôi", Role = UserRole.Student, StudentCode = "2112003", Department = "CNTT" },
+            new() { Id = DemoStudentId4, Email = "sv004@student.hcmut.edu.vn", PasswordHash = passwordHash, FullName = "Hoàng Thị Lan", Role = UserRole.Student, StudentCode = "2112004", Department = "CNTT", Status = UserStatus.Disabled },
+            new() { Id = DemoStudentId5, Email = "sv005@student.hcmut.edu.vn", PasswordHash = passwordHash, FullName = "Đặng Quốc Bảo", Role = UserRole.Student, StudentCode = "2112005", Department = "CNTT" },
         };
 
-        await context.Users.AddRangeAsync(users);
+        var existingUserIds = await context.Users
+            .AsNoTracking()
+            .Select(user => user.Id)
+            .ToListAsync();
+
+        var missingUsers = users
+            .Where(user => !existingUserIds.Contains(user.Id))
+            .ToList();
+
+        if (missingUsers.Count == 0)
+            return false;
+
+        await context.Users.AddRangeAsync(missingUsers);
+        return true;
     }
 
-    private static async Task SeedSubjectsAndCategories(AppDbContext context)
+    private static async Task<bool> SeedSubjectsAndCategories(AppDbContext context)
     {
-        var lecturerId1 = Guid.Parse("a2000000-0000-0000-0000-000000000002");
-        var lecturerId2 = Guid.Parse("a3000000-0000-0000-0000-000000000003");
-
         var subjects = new List<Subject>
         {
-            new() { Id = Guid.Parse("b1000000-0000-0000-0000-000000000001"), Code = "CS101", Name = "Nhập môn Lập trình", Department = "Khoa CNTT", CreatedById = lecturerId1 },
-            new() { Id = Guid.Parse("b2000000-0000-0000-0000-000000000002"), Code = "CS201", Name = "Cấu trúc Dữ liệu & Giải thuật", Department = "Khoa CNTT", CreatedById = lecturerId1 },
-            new() { Id = Guid.Parse("b3000000-0000-0000-0000-000000000003"), Code = "CS301", Name = "Cơ sở Dữ liệu", Department = "Khoa CNTT", CreatedById = lecturerId2 },
+            new() { Id = DemoSubjectProgrammingId, Code = "CS101", Name = "Nhập môn Lập trình", Department = "Khoa CNTT", CreatedById = DemoLecturerId },
+            new() { Id = DemoSubjectAlgorithmsId, Code = "CS201", Name = "Cấu trúc Dữ liệu & Giải thuật", Department = "Khoa CNTT", CreatedById = DemoLecturerId },
+            new() { Id = DemoSubjectDatabaseId, Code = "CS301", Name = "Cơ sở Dữ liệu", Department = "Khoa CNTT", CreatedById = DemoLecturerId2 },
         };
 
-        await context.Subjects.AddRangeAsync(subjects);
+        var existingSubjectIds = await context.Subjects
+            .AsNoTracking()
+            .Select(subject => subject.Id)
+            .ToListAsync();
+
+        var missingSubjects = subjects
+            .Where(subject => !existingSubjectIds.Contains(subject.Id))
+            .ToList();
+
+        if (missingSubjects.Count > 0)
+            await context.Subjects.AddRangeAsync(missingSubjects);
 
         var categories = new List<QuestionCategory>
         {
-            new() { Id = Guid.Parse("c1000000-0000-0000-0000-000000000001"), SubjectId = subjects[0].Id, Name = "Biến và kiểu dữ liệu" },
-            new() { Id = Guid.Parse("c2000000-0000-0000-0000-000000000002"), SubjectId = subjects[0].Id, Name = "Cấu trúc điều khiển" },
-            new() { Id = Guid.Parse("c3000000-0000-0000-0000-000000000003"), SubjectId = subjects[0].Id, Name = "Hàm và đệ quy" },
-            new() { Id = Guid.Parse("c4000000-0000-0000-0000-000000000004"), SubjectId = subjects[0].Id, Name = "Mảng và chuỗi" },
-            new() { Id = Guid.Parse("c5000000-0000-0000-0000-000000000005"), SubjectId = subjects[0].Id, Name = "Con trỏ" },
-            new() { Id = Guid.Parse("c6000000-0000-0000-0000-000000000006"), SubjectId = subjects[1].Id, Name = "Danh sách liên kết" },
-            new() { Id = Guid.Parse("c7000000-0000-0000-0000-000000000007"), SubjectId = subjects[1].Id, Name = "Stack & Queue" },
-            new() { Id = Guid.Parse("c8000000-0000-0000-0000-000000000008"), SubjectId = subjects[1].Id, Name = "Cây nhị phân" },
-            new() { Id = Guid.Parse("c9000000-0000-0000-0000-000000000009"), SubjectId = subjects[2].Id, Name = "Mô hình quan hệ" },
-            new() { Id = Guid.Parse("ca000000-0000-0000-0000-00000000000a"), SubjectId = subjects[2].Id, Name = "SQL cơ bản" },
+            new() { Id = DemoCategoryVariablesId, SubjectId = DemoSubjectProgrammingId, Name = "Biến và kiểu dữ liệu" },
+            new() { Id = DemoCategoryControlFlowId, SubjectId = DemoSubjectProgrammingId, Name = "Cấu trúc điều khiển" },
+            new() { Id = DemoCategoryRecursionId, SubjectId = DemoSubjectProgrammingId, Name = "Hàm và đệ quy" },
+            new() { Id = DemoCategoryArraysId, SubjectId = DemoSubjectProgrammingId, Name = "Mảng và chuỗi" },
+            new() { Id = DemoCategoryPointersId, SubjectId = DemoSubjectProgrammingId, Name = "Con trỏ" },
+            new() { Id = DemoCategoryLinkedListId, SubjectId = DemoSubjectAlgorithmsId, Name = "Danh sách liên kết" },
+            new() { Id = DemoCategoryStackQueueId, SubjectId = DemoSubjectAlgorithmsId, Name = "Stack & Queue" },
+            new() { Id = DemoCategoryBinaryTreeId, SubjectId = DemoSubjectAlgorithmsId, Name = "Cây nhị phân" },
+            new() { Id = DemoCategoryRelationalModelId, SubjectId = DemoSubjectDatabaseId, Name = "Mô hình quan hệ" },
+            new() { Id = DemoCategorySqlId, SubjectId = DemoSubjectDatabaseId, Name = "SQL cơ bản" },
         };
 
-        await context.QuestionCategories.AddRangeAsync(categories);
+        var existingCategoryIds = await context.QuestionCategories
+            .AsNoTracking()
+            .Select(category => category.Id)
+            .ToListAsync();
+
+        var missingCategories = categories
+            .Where(category => !existingCategoryIds.Contains(category.Id))
+            .ToList();
+
+        if (missingCategories.Count > 0)
+            await context.QuestionCategories.AddRangeAsync(missingCategories);
+
+        return missingSubjects.Count > 0 || missingCategories.Count > 0;
     }
 
-    private static async Task SeedQuestions(AppDbContext context)
+    private static async Task<bool> SeedQuestions(AppDbContext context)
     {
-        var lecturerId = Guid.Parse("a2000000-0000-0000-0000-000000000002");
-        var subjectId = Guid.Parse("b1000000-0000-0000-0000-000000000001");
-        var cat1 = Guid.Parse("c1000000-0000-0000-0000-000000000001");
-        var cat2 = Guid.Parse("c2000000-0000-0000-0000-000000000002");
-        var cat3 = Guid.Parse("c3000000-0000-0000-0000-000000000003");
-
         var questions = new List<Question>
         {
-            CreateQuestion(Guid.NewGuid(), subjectId, cat1, lecturerId, "Trong ngôn ngữ C, kiểu dữ liệu nào sau đây dùng để lưu trữ số thực?", Difficulty.Easy,
+            CreateQuestion(Guid.Parse("d1000000-0000-0000-0000-000000000001"), DemoSubjectProgrammingId, DemoCategoryVariablesId, DemoLecturerId, "Trong ngôn ngữ C, kiểu dữ liệu nào sau đây dùng để lưu trữ số thực?", Difficulty.Easy,
                 ("int", false), ("float", true), ("char", false), ("bool", false)),
-            CreateQuestion(Guid.NewGuid(), subjectId, cat2, lecturerId, "Vòng lặp nào trong C sẽ kiểm tra điều kiện trước khi thực thi phần thân?", Difficulty.Medium,
+            CreateQuestion(Guid.Parse("d1000000-0000-0000-0000-000000000002"), DemoSubjectProgrammingId, DemoCategoryControlFlowId, DemoLecturerId, "Vòng lặp nào trong C sẽ kiểm tra điều kiện trước khi thực thi phần thân?", Difficulty.Medium,
                 ("do-while", false), ("for", false), ("while", false), ("Cả B và C", true)),
-            CreateQuestion(Guid.NewGuid(), subjectId, cat3, lecturerId, "Hàm đệ quy cần có thành phần nào để tránh lặp vô hạn?", Difficulty.Easy,
+            CreateQuestion(Guid.Parse("d1000000-0000-0000-0000-000000000003"), DemoSubjectProgrammingId, DemoCategoryRecursionId, DemoLecturerId, "Hàm đệ quy cần có thành phần nào để tránh lặp vô hạn?", Difficulty.Easy,
                 ("Biến toàn cục", false), ("Điều kiện dừng (base case)", true), ("Vòng lặp for", false), ("Câu lệnh goto", false)),
-            CreateQuestion(Guid.NewGuid(), subjectId, cat1, lecturerId, "Toán tử nào dùng để truy cập địa chỉ của biến trong C?", Difficulty.Easy,
+            CreateQuestion(Guid.Parse("d1000000-0000-0000-0000-000000000004"), DemoSubjectProgrammingId, DemoCategoryVariablesId, DemoLecturerId, "Toán tử nào dùng để truy cập địa chỉ của biến trong C?", Difficulty.Easy,
                 ("*", false), ("&", true), ("#", false), ("@", false)),
-            CreateQuestion(Guid.NewGuid(), subjectId, cat1, lecturerId, "Hàm printf() trong C thuộc thư viện nào?", Difficulty.Easy,
+            CreateQuestion(Guid.Parse("d1000000-0000-0000-0000-000000000005"), DemoSubjectProgrammingId, DemoCategoryVariablesId, DemoLecturerId, "Hàm printf() trong C thuộc thư viện nào?", Difficulty.Easy,
                 ("stdlib.h", false), ("stdio.h", true), ("string.h", false), ("math.h", false)),
-            CreateQuestion(Guid.NewGuid(), subjectId, cat2, lecturerId, "Kết quả của biểu thức 5 / 2 (với 5 và 2 đều là int) là bao nhiêu?", Difficulty.Medium,
+            CreateQuestion(Guid.Parse("d1000000-0000-0000-0000-000000000006"), DemoSubjectProgrammingId, DemoCategoryControlFlowId, DemoLecturerId, "Kết quả của biểu thức 5 / 2 (với 5 và 2 đều là int) là bao nhiêu?", Difficulty.Medium,
                 ("2.5", false), ("2", true), ("3", false), ("2.0", false)),
-            CreateQuestion(Guid.NewGuid(), subjectId, cat2, lecturerId, "Câu lệnh nào dùng để kết thúc vòng lặp trước thời hạn?", Difficulty.Easy,
+            CreateQuestion(Guid.Parse("d1000000-0000-0000-0000-000000000007"), DemoSubjectProgrammingId, DemoCategoryControlFlowId, DemoLecturerId, "Câu lệnh nào dùng để kết thúc vòng lặp trước thời hạn?", Difficulty.Easy,
                 ("continue", false), ("break", true), ("return", false), ("exit", false)),
-            CreateQuestion(Guid.NewGuid(), subjectId, cat1, lecturerId, "Mảng trong C có chỉ số bắt đầu từ?", Difficulty.Easy,
+            CreateQuestion(Guid.Parse("d1000000-0000-0000-0000-000000000008"), DemoSubjectProgrammingId, DemoCategoryVariablesId, DemoLecturerId, "Mảng trong C có chỉ số bắt đầu từ?", Difficulty.Easy,
                 ("0", true), ("1", false), ("-1", false), ("Tùy khai báo", false)),
-            CreateQuestion(Guid.NewGuid(), subjectId, cat3, lecturerId, "Từ khóa 'static' trong C dùng để làm gì?", Difficulty.Medium,
+            CreateQuestion(Guid.Parse("d1000000-0000-0000-0000-000000000009"), DemoSubjectProgrammingId, DemoCategoryRecursionId, DemoLecturerId, "Từ khóa 'static' trong C dùng để làm gì?", Difficulty.Medium,
                 ("Khai báo biến hằng", false), ("Biến tĩnh, giữ giá trị qua các lần gọi hàm", true), ("Khai báo biến ngoại", false), ("Tạo con trỏ", false)),
-            CreateQuestion(Guid.NewGuid(), subjectId, cat1, lecturerId, "Kích thước kiểu 'int' trên hệ thống 32-bit thường là bao nhiêu byte?", Difficulty.Easy,
+            CreateQuestion(Guid.Parse("d1000000-0000-0000-0000-00000000000a"), DemoSubjectProgrammingId, DemoCategoryVariablesId, DemoLecturerId, "Kích thước kiểu 'int' trên hệ thống 32-bit thường là bao nhiêu byte?", Difficulty.Easy,
                 ("1", false), ("2", false), ("4", true), ("8", false)),
-            CreateQuestion(Guid.NewGuid(), subjectId, cat1, lecturerId, "Phát biểu nào đúng về con trỏ NULL trong C?", Difficulty.Medium,
+            CreateQuestion(Guid.Parse("d1000000-0000-0000-0000-00000000000b"), DemoSubjectProgrammingId, DemoCategoryVariablesId, DemoLecturerId, "Phát biểu nào đúng về con trỏ NULL trong C?", Difficulty.Medium,
                 ("Trỏ đến vùng nhớ số 0", false), ("Là con trỏ không trỏ đến đối tượng hợp lệ nào", true), ("Luôn gây lỗi khi sử dụng", false), ("Chỉ dùng được với kiểu int", false)),
-            CreateQuestion(Guid.NewGuid(), subjectId, cat3, lecturerId, "Struct trong C dùng để làm gì?", Difficulty.Easy,
+            CreateQuestion(Guid.Parse("d1000000-0000-0000-0000-00000000000c"), DemoSubjectProgrammingId, DemoCategoryRecursionId, DemoLecturerId, "Struct trong C dùng để làm gì?", Difficulty.Easy,
                 ("Định nghĩa hàm", false), ("Nhóm các biến có kiểu khác nhau thành một kiểu dữ liệu", true), ("Tạo vòng lặp", false), ("Quản lý bộ nhớ", false)),
-            CreateQuestion(Guid.NewGuid(), subjectId, cat3, lecturerId, "Hàm malloc() trả về kiểu gì?", Difficulty.Hard,
+            CreateQuestion(Guid.Parse("d1000000-0000-0000-0000-00000000000d"), DemoSubjectProgrammingId, DemoCategoryRecursionId, DemoLecturerId, "Hàm malloc() trả về kiểu gì?", Difficulty.Hard,
                 ("int", false), ("void*", true), ("char*", false), ("float", false)),
-            CreateQuestion(Guid.NewGuid(), subjectId, cat1, lecturerId, "Toán tử sizeof trong C trả về gì?", Difficulty.Easy,
+            CreateQuestion(Guid.Parse("d1000000-0000-0000-0000-00000000000e"), DemoSubjectProgrammingId, DemoCategoryVariablesId, DemoLecturerId, "Toán tử sizeof trong C trả về gì?", Difficulty.Easy,
                 ("Giá trị của biến", false), ("Kích thước bộ nhớ tính bằng byte", true), ("Địa chỉ bộ nhớ", false), ("Số phần tử mảng", false)),
-            CreateQuestion(Guid.NewGuid(), subjectId, cat2, lecturerId, "Phát biểu nào đúng về hàm main() trong C?", Difficulty.Easy,
+            CreateQuestion(Guid.Parse("d1000000-0000-0000-0000-00000000000f"), DemoSubjectProgrammingId, DemoCategoryControlFlowId, DemoLecturerId, "Phát biểu nào đúng về hàm main() trong C?", Difficulty.Easy,
                 ("Không bắt buộc có", false), ("Là hàm đầu tiên được thực thi khi chạy chương trình", true), ("Có thể khai báo nhiều lần", false), ("Chỉ trả về void", false)),
         };
 
-        await context.Questions.AddRangeAsync(questions);
+        var existingContents = await context.Questions
+            .AsNoTracking()
+            .Where(question => question.SubjectId == DemoSubjectProgrammingId && question.CreatedById == DemoLecturerId)
+            .Select(question => question.Content)
+            .ToListAsync();
+
+        var existingContentSet = new HashSet<string>(existingContents, StringComparer.Ordinal);
+        var missingQuestions = questions
+            .Where(question => !existingContentSet.Contains(question.Content))
+            .ToList();
+
+        if (missingQuestions.Count == 0)
+            return false;
+
+        await context.Questions.AddRangeAsync(missingQuestions);
+        return true;
     }
 
     private static Question CreateQuestion(Guid id, Guid subjectId, Guid categoryId, Guid createdById,

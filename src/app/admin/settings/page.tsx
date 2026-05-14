@@ -53,7 +53,7 @@ export default function AdminSettingsPage() {
             const response = await getSettings(request);
             setSettings(mapSettingsToForm(response));
         } catch (loadError) {
-            setError(loadError instanceof Error ? loadError.message : 'Khong the tai cau hinh he thong.');
+            setError(loadError instanceof Error ? loadError.message : 'Không thể tải cấu hình hệ thống.');
         } finally {
             setLoading(false);
         }
@@ -77,7 +77,7 @@ export default function AdminSettingsPage() {
         } catch (saveError) {
             toast({
                 type: 'error',
-                title: 'Luu cau hinh that bai',
+                title: 'Lưu cấu hình thất bại',
                 message: saveError instanceof Error ? saveError.message : 'Da xay ra loi khong xac dinh.',
             });
         } finally {
@@ -89,16 +89,16 @@ export default function AdminSettingsPage() {
         return (
             <motion.div variants={staggerContainer} initial="initial" animate="enter" className="space-y-6">
                 <motion.div variants={staggerItem}>
-                    <PageHeader title="Cau hinh he thong" description="Du lieu dang duoc doc tu bang SystemSettings that." />
+                    <PageHeader title="Cấu hình hệ thống" description="Dữ liệu đang được đọc từ bảng SystemSettings thật." />
                 </motion.div>
                 <motion.div variants={staggerItem}>
                     <InlineState
                         icon={<AlertCircle className="h-10 w-10" />}
-                        title="Khong the tai cau hinh"
+                        title="Không thể tải cấu hình"
                         description={error}
                         actions={(
                             <Button variant="secondary" icon={<RefreshCw className="h-4 w-4" />} onClick={() => void loadSettings()}>
-                                Thu lai
+                                Thử lại
                             </Button>
                         )}
                     />
@@ -111,11 +111,11 @@ export default function AdminSettingsPage() {
         <motion.div variants={staggerContainer} initial="initial" animate="enter" className="space-y-6">
             <motion.div variants={staggerItem}>
                 <PageHeader
-                    title="Cau hinh he thong"
+                    title="Cấu hình hệ thống"
                     description="Cac gia tri ben duoi dang map truc tiep toi bang SystemSettings."
                     actions={(
                         <Button icon={<Save className="h-4 w-4" />} onClick={() => void handleSave()} loading={saving} disabled={!settings || loading}>
-                            Luu thay doi
+                            Lưu thay đổi
                         </Button>
                     )}
                 />
@@ -123,15 +123,15 @@ export default function AdminSettingsPage() {
 
             {!settings ? (
                 <motion.div variants={staggerItem}>
-                    <InlineState title="Dang tai cau hinh" description="ExamGuard dang doc cau hinh he thong tu backend." />
+                    <InlineState title="Đang tải cấu hình" description="ExamGuard đang đọc cấu hình hệ thống từ backend." />
                 </motion.div>
             ) : (
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 max-w-5xl">
                     <motion.div variants={staggerItem}>
-                        <Panel title="Thong tin chung">
+                        <Panel title="Thông tin chung">
                             <div className="space-y-4">
                                 <Input
-                                    label="Ten he thong"
+                                    label="Tên hệ thống"
                                     value={settings.siteName}
                                     onChange={(event) => setSettings((current) => current ? { ...current, siteName: event.target.value } : current)}
                                 />
