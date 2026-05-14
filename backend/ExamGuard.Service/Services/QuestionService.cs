@@ -86,8 +86,14 @@ public class QuestionService : IQuestionService
         var subject = await _db.Subjects.FindAsync(request.SubjectId)
             ?? throw new NotFoundException("Subject", request.SubjectId);
 
+        if (!subject.IsActive)
+            throw new AppException("Subject is inactive. Cannot create questions for this subject.");
+
         if (subject.CreatedById != currentUserId)
             throw new ForbiddenException("Bạn không có quyền thêm câu hỏi cho môn học này.");
+
+        ValidateQuestionPayload(request.Content, request.Options);
+        await EnsureCategoryBelongsToSubjectAsync(request.CategoryId, request.SubjectId);
 
         // Validate
         if (request.Options.Count < 2)
@@ -149,8 +155,14 @@ public class QuestionService : IQuestionService
             .FirstOrDefaultAsync(q => q.Id == id)
             ?? throw new NotFoundException("Question", id);
 
+        if (!question.Subject.IsActive)
+            throw new AppException("Subject is inactive. Cannot update questions for this subject.");
+
         if (!isAdmin && question.Subject.CreatedById != currentUserId)
             throw new ForbiddenException("Bạn không có quyền chỉnh sửa câu hỏi này.");
+
+        ValidateQuestionPayload(request.Content, request.Options);
+        await EnsureCategoryBelongsToSubjectAsync(request.CategoryId, question.SubjectId);
 
         if (request.Options.Count < 2)
             throw new AppException("Câu hỏi phải có ít nhất 2 đáp án.");
@@ -227,4 +239,34 @@ public class QuestionService : IQuestionService
         CreatedAt = q.CreatedAt,
         UpdatedAt = q.UpdatedAt
     };
+
+    private static void ValidateQuestionPayload(string content, IReadOnlyCollection<CreateOptionRequest> options)
+    {
+        if (string.IsNullOrWhiteSpace(content))
+            throw new AppException("Question content is required.");
+
+        if (options.Any(o => string.IsNullOrWhiteSpace(o.Label) || string.IsNullOrWhiteSpace(o.Content)))
+            throw new AppException("Each option must have a label and content.");
+
+        var hasDuplicateLabel = options
+            .GroupBy(o => o.Label.Trim(), StringComparer.OrdinalIgnoreCase)
+            .Any(group => group.Count() > 1);
+
+        if (hasDuplicateLabel)
+            throw new AppException("Option labels must be unique.");
+    }
+
+    private async Task EnsureCategoryBelongsToSubjectAsync(Guid? categoryId, Guid subjectId)
+    {
+        if (!categoryId.HasValue)
+            return;
+
+        var category = await _db.QuestionCategories
+            .AsNoTracking()
+            .FirstOrDefaultAsync(c => c.Id == categoryId.Value)
+            ?? throw new NotFoundException("Category", categoryId.Value);
+
+        if (category.SubjectId != subjectId)
+            throw new AppException("Category does not belong to the question subject.");
+    }
 }

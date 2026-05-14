@@ -151,6 +151,7 @@ if (app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 app.UseCors("AllowFrontend");
 app.UseAuthentication();
+app.UseMiddleware<MaintenanceModeMiddleware>();
 app.UseAuthorization();
 app.MapControllers();
 

@@ -59,7 +59,9 @@ public class AttemptService : IAttemptService
 
         if (session.MaxParticipants.HasValue)
         {
-            var currentParticipants = await _db.ExamAttempts.CountAsync(a => a.SessionId == session.Id);
+            // MaxParticipants is the maximum number of concurrent in-progress attempts, not historical submissions.
+            var currentParticipants = await _db.ExamAttempts.CountAsync(a =>
+                a.SessionId == session.Id && a.Status == AttemptStatus.InProgress);
             if (currentParticipants >= session.MaxParticipants.Value)
                 throw new ConflictException("This exam session has reached its participant limit.");
         }
@@ -196,15 +198,27 @@ public class AttemptService : IAttemptService
             attempt.Answers.Add(answer);
         }
 
+        var policy = await GetAttemptPolicyAsync();
+        var answeredAt = DateTime.UtcNow;
         var previousSelection = answer.SelectedOptionSnapshotId;
         answer.SelectedOptionSnapshotId = request.SelectedOptionSnapshotId;
-        answer.AnsweredAt = DateTime.UtcNow;
+        answer.AnsweredAt = answeredAt;
+
+        if (policy.RapidAnswerThresholdSeconds > 0)
+        {
+            var rapidWindowStart = answeredAt.AddSeconds(-policy.RapidAnswerThresholdSeconds);
+            var rapidAnswerCount = attempt.Answers.Count(a =>
+                a.AnsweredAt.HasValue && a.AnsweredAt.Value >= rapidWindowStart);
+
+            if (rapidAnswerCount >= 3)
+                FlagAttempt(attempt, "Rapid answers detected");
+        }
 
         if (previousSelection.HasValue
             && request.SelectedOptionSnapshotId.HasValue
             && previousSelection.Value != request.SelectedOptionSnapshotId.Value)
         {
-            attempt.EventLogs.Add(new AttemptEventLog
+            AddAttemptEvent(attempt, new AttemptEventLog
             {
                 Id = Guid.NewGuid(),
                 AttemptId = attempt.Id,
@@ -260,7 +274,7 @@ public class AttemptService : IAttemptService
         var policy = await GetAttemptPolicyAsync();
         var now = DateTime.UtcNow;
 
-        attempt.EventLogs.Add(new AttemptEventLog
+        AddAttemptEvent(attempt, new AttemptEventLog
         {
             Id = Guid.NewGuid(),
             AttemptId = attempt.Id,
@@ -278,11 +292,12 @@ public class AttemptService : IAttemptService
         if (eventType == AttemptEventType.PageReload)
             attempt.ReloadCount++;
 
-        if (eventType is AttemptEventType.CopyAttempt
-            or AttemptEventType.PasteAttempt
-            or AttemptEventType.RightClick
+        var shouldFlagSecurityEvent = eventType is AttemptEventType.RightClick
             or AttemptEventType.PageReload
-            or AttemptEventType.ConcurrentLogin)
+            or AttemptEventType.ConcurrentLogin
+            || (!policy.AllowCopyPaste && eventType is AttemptEventType.CopyAttempt or AttemptEventType.PasteAttempt);
+
+        if (shouldFlagSecurityEvent)
         {
             FlagAttempt(attempt, request.Details ?? eventType.ToString());
         }
@@ -475,7 +490,7 @@ public class AttemptService : IAttemptService
         attempt.Score = decimal.Round(score, 2, MidpointRounding.AwayFromZero);
         attempt.TotalQuestions = attempt.QuestionSnapshots.Count;
 
-        attempt.EventLogs.Add(new AttemptEventLog
+        AddAttemptEvent(attempt, new AttemptEventLog
         {
             Id = Guid.NewGuid(),
             AttemptId = attempt.Id,
@@ -488,6 +503,12 @@ public class AttemptService : IAttemptService
         });
 
         await _db.SaveChangesAsync();
+    }
+
+    private void AddAttemptEvent(ExamAttempt attempt, AttemptEventLog eventLog)
+    {
+        attempt.EventLogs.Add(eventLog);
+        _db.Entry(eventLog).State = EntityState.Added;
     }
 
     private async Task<AttemptDetailDto> BuildAttemptDetailAsync(ExamAttempt attempt, bool hideResults)

@@ -29,8 +29,10 @@ public class SettingsService : ISettingsService
         SetSetting(settings, "SiteName", string.IsNullOrWhiteSpace(request.SiteName) ? "ExamGuard" : request.SiteName.Trim(), "Display name of the system");
         SetSetting(settings, "MaintenanceMode", request.MaintenanceMode.ToString().ToLowerInvariant(), "Enable maintenance mode");
         SetSetting(settings, "MaxLoginAttempts", Math.Max(1, request.MaxLoginAttempts).ToString(), "Max failed login attempts before lock");
-        SetSetting(settings, "SessionTimeoutMinutes", Math.Max(5, request.SessionTimeoutMinutes).ToString(), "Inactive session timeout");
-        SetSetting(settings, "TabSwitchWarning", request.TabSwitchWarning.ToString().ToLowerInvariant(), "Show warning when student leaves exam tab");
+        // SessionTimeoutMinutes is not currently enforced by the backend; JWT lifetime is controlled by JwtSettings and exam expiry by exam/session time.
+        SetSetting(settings, "SessionTimeoutMinutes", Math.Max(5, request.SessionTimeoutMinutes).ToString(), "Configured session timeout display value; not enforced by backend auth or exam idle timeout");
+        // Frontend-only warning toggle. Backend enforcement uses MaxTabSwitches and AutoSubmitOnTabLimit.
+        SetSetting(settings, "TabSwitchWarning", request.TabSwitchWarning.ToString().ToLowerInvariant(), "Frontend-only tab switch warning toggle");
         SetSetting(settings, "MaxTabSwitches", Math.Max(0, request.MaxTabSwitches).ToString(), "Maximum tab switches before warning");
         SetSetting(settings, "AutoSubmitOnTabLimit", request.AutoSubmitOnTabLimit.ToString().ToLowerInvariant(), "Auto-submit when tab switch limit is exceeded");
         SetSetting(settings, "AllowCopyPaste", request.AllowCopyPaste.ToString().ToLowerInvariant(), "Allow copy/paste during exam");

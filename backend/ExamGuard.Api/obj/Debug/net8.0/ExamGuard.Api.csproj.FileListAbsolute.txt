@@ -131,3 +131,7 @@ D:\ggm\code\project_code\backend\ExamGuard.Api\bin\Debug\net8.0\Microsoft.Extens
 D:\ggm\code\project_code\backend\ExamGuard.Api\bin\Debug\net8.0\Microsoft.Extensions.Configuration.Binder.dll
 D:\ggm\code\project_code\backend\ExamGuard.Api\bin\Debug\net8.0\Microsoft.Extensions.Primitives.dll
 D:\ggm\code\project_code\backend\ExamGuard.Api\bin\Debug\net8.0\Neo4j.Driver.dll
+D:\ggm\code\project_code\backend\ExamGuard.Api\bin\Debug\net8.0\Microsoft.Extensions.Diagnostics.Abstractions.dll
+D:\ggm\code\project_code\backend\ExamGuard.Api\bin\Debug\net8.0\Microsoft.Extensions.FileProviders.Abstractions.dll
+D:\ggm\code\project_code\backend\ExamGuard.Api\bin\Debug\net8.0\Microsoft.Extensions.Hosting.Abstractions.dll
+D:\ggm\code\project_code\backend\ExamGuard.Api\bin\Debug\net8.0\System.Diagnostics.DiagnosticSource.dll

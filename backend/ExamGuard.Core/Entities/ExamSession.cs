@@ -9,6 +9,7 @@ public class ExamSession
     public string Name { get; set; } = string.Empty;
     public DateTime StartTime { get; set; }
     public DateTime EndTime { get; set; }
+    // Maximum concurrent in-progress attempts allowed for this session.
     public int? MaxParticipants { get; set; }
     public string? Password { get; set; }
     public SessionStatus Status { get; set; } = SessionStatus.Scheduled;

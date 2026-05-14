@@ -1,5 +1,6 @@
 using ExamGuard.Core.DTOs.Question;
 using ExamGuard.Core.Entities;
+using ExamGuard.Core.Enums;
 using ExamGuard.Core.Exceptions;
 using ExamGuard.Core.Interfaces;
 using ExamGuard.Data;
@@ -20,16 +21,16 @@ public class SubjectService : ISubjectService
     }
 
     /// <summary>
-    /// Danh mục môn học dùng chung (admin quản lý). Giảng viên cần thấy toàn bộ môn để gắn kỳ thi / ngân hàng câu hỏi,
-    /// không chỉ môn do chính họ tạo — tham số lecturerId giữ để tương thích interface, không còn lọc theo người tạo.
+    /// Admin sees every subject; lecturers see only subjects they created.
     /// </summary>
     public async Task<List<SubjectDto>> GetSubjectsAsync(Guid? lecturerId)
     {
-        _ = lecturerId;
-
         var query = _db.Subjects
             .Include(s => s.CreatedBy)
             .AsQueryable();
+
+        if (lecturerId.HasValue)
+            query = query.Where(s => s.CreatedById == lecturerId.Value);
 
         return await query
             .OrderBy(s => s.Code)
@@ -76,16 +77,36 @@ public class SubjectService : ISubjectService
 
     public async Task<SubjectDto> CreateSubjectAsync(CreateSubjectRequest request, Guid currentUserId)
     {
-        if (await _db.Subjects.AnyAsync(s => s.Code == request.Code))
-            throw new ConflictException($"Subject code '{request.Code}' already exists.");
+        if (string.IsNullOrWhiteSpace(request.Code))
+            throw new AppException("Subject code is required.");
+
+        if (string.IsNullOrWhiteSpace(request.Name))
+            throw new AppException("Subject name is required.");
+
+        var normalizedCode = request.Code.Trim().ToUpperInvariant();
+        if (await _db.Subjects.AnyAsync(s => s.Code == normalizedCode))
+            throw new ConflictException($"Subject code '{normalizedCode}' already exists.");
+
+        var ownerId = request.CreatedById ?? currentUserId;
+        var owner = await _db.Users.FindAsync(ownerId)
+            ?? throw new NotFoundException("User", ownerId);
+
+        if (owner.Status != UserStatus.Active)
+            throw new AppException("Subject owner must be an active user.");
+
+        if (owner.Role == UserRole.Student)
+            throw new AppException("Subject owner cannot be a student.");
+
+        if (owner.Role is not (UserRole.Lecturer or UserRole.Admin))
+            throw new AppException("Subject owner must be a lecturer or admin.");
 
         var subject = new Subject
         {
             Id = Guid.NewGuid(),
-            Code = request.Code.Trim().ToUpperInvariant(),
+            Code = normalizedCode,
             Name = request.Name.Trim(),
             Department = request.Department?.Trim(),
-            CreatedById = request.CreatedById ?? currentUserId,
+            CreatedById = owner.Id,
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow
         };
@@ -94,7 +115,19 @@ public class SubjectService : ISubjectService
         await _db.SaveChangesAsync();
 
         _logger.LogInformation("Subject created: {Code} by user {UserId}", subject.Code, currentUserId);
-        return await GetSubjectByIdAsync(subject.Id, currentUserId, false);
+        return new SubjectDto
+        {
+            Id = subject.Id,
+            Code = subject.Code,
+            Name = subject.Name,
+            Department = subject.Department,
+            CreatedById = subject.CreatedById,
+            CreatedByName = owner.FullName,
+            QuestionCount = 0,
+            ExamCount = 0,
+            IsActive = subject.IsActive,
+            CreatedAt = subject.CreatedAt
+        };
     }
 
     public async Task<SubjectDto> UpdateSubjectAsync(Guid id, UpdateSubjectRequest request, Guid currentUserId, bool isAdmin)

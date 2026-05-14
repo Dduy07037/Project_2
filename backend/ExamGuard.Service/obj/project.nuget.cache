@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "dgSpecHash": "fMy8WslWJQc=",
+  "dgSpecHash": "1NR893sT+8s=",
   "success": true,
   "projectFilePath": "D:\\ggm\\code\\project_code\\backend\\ExamGuard.Service\\ExamGuard.Service.csproj",
   "expectedPackageFiles": [
@@ -15,10 +15,13 @@
     "C:\\Users\\dduy0\\.nuget\\packages\\microsoft.extensions.configuration.abstractions\\10.0.5\\microsoft.extensions.configuration.abstractions.10.0.5.nupkg.sha512",
     "C:\\Users\\dduy0\\.nuget\\packages\\microsoft.extensions.configuration.binder\\10.0.5\\microsoft.extensions.configuration.binder.10.0.5.nupkg.sha512",
     "C:\\Users\\dduy0\\.nuget\\packages\\microsoft.extensions.dependencyinjection\\8.0.1\\microsoft.extensions.dependencyinjection.8.0.1.nupkg.sha512",
-    "C:\\Users\\dduy0\\.nuget\\packages\\microsoft.extensions.dependencyinjection.abstractions\\8.0.2\\microsoft.extensions.dependencyinjection.abstractions.8.0.2.nupkg.sha512",
+    "C:\\Users\\dduy0\\.nuget\\packages\\microsoft.extensions.dependencyinjection.abstractions\\10.0.5\\microsoft.extensions.dependencyinjection.abstractions.10.0.5.nupkg.sha512",
+    "C:\\Users\\dduy0\\.nuget\\packages\\microsoft.extensions.diagnostics.abstractions\\10.0.5\\microsoft.extensions.diagnostics.abstractions.10.0.5.nupkg.sha512",
+    "C:\\Users\\dduy0\\.nuget\\packages\\microsoft.extensions.fileproviders.abstractions\\10.0.5\\microsoft.extensions.fileproviders.abstractions.10.0.5.nupkg.sha512",
+    "C:\\Users\\dduy0\\.nuget\\packages\\microsoft.extensions.hosting.abstractions\\10.0.5\\microsoft.extensions.hosting.abstractions.10.0.5.nupkg.sha512",
     "C:\\Users\\dduy0\\.nuget\\packages\\microsoft.extensions.logging\\8.0.1\\microsoft.extensions.logging.8.0.1.nupkg.sha512",
-    "C:\\Users\\dduy0\\.nuget\\packages\\microsoft.extensions.logging.abstractions\\8.0.2\\microsoft.extensions.logging.abstractions.8.0.2.nupkg.sha512",
-    "C:\\Users\\dduy0\\.nuget\\packages\\microsoft.extensions.options\\8.0.2\\microsoft.extensions.options.8.0.2.nupkg.sha512",
+    "C:\\Users\\dduy0\\.nuget\\packages\\microsoft.extensions.logging.abstractions\\10.0.5\\microsoft.extensions.logging.abstractions.10.0.5.nupkg.sha512",
+    "C:\\Users\\dduy0\\.nuget\\packages\\microsoft.extensions.options\\10.0.5\\microsoft.extensions.options.10.0.5.nupkg.sha512",
     "C:\\Users\\dduy0\\.nuget\\packages\\microsoft.extensions.primitives\\10.0.5\\microsoft.extensions.primitives.10.0.5.nupkg.sha512",
     "C:\\Users\\dduy0\\.nuget\\packages\\microsoft.identitymodel.abstractions\\8.3.0\\microsoft.identitymodel.abstractions.8.3.0.nupkg.sha512",
     "C:\\Users\\dduy0\\.nuget\\packages\\microsoft.identitymodel.jsonwebtokens\\8.3.0\\microsoft.identitymodel.jsonwebtokens.8.3.0.nupkg.sha512",
@@ -27,6 +30,7 @@
     "C:\\Users\\dduy0\\.nuget\\packages\\neo4j.driver\\6.0.0\\neo4j.driver.6.0.0.nupkg.sha512",
     "C:\\Users\\dduy0\\.nuget\\packages\\npgsql\\8.0.6\\npgsql.8.0.6.nupkg.sha512",
     "C:\\Users\\dduy0\\.nuget\\packages\\npgsql.entityframeworkcore.postgresql\\8.0.11\\npgsql.entityframeworkcore.postgresql.8.0.11.nupkg.sha512",
+    "C:\\Users\\dduy0\\.nuget\\packages\\system.diagnostics.diagnosticsource\\10.0.5\\system.diagnostics.diagnosticsource.10.0.5.nupkg.sha512",
     "C:\\Users\\dduy0\\.nuget\\packages\\system.identitymodel.tokens.jwt\\8.3.0\\system.identitymodel.tokens.jwt.8.3.0.nupkg.sha512",
     "C:\\Users\\dduy0\\.nuget\\packages\\system.io.pipelines\\8.0.0\\system.io.pipelines.8.0.0.nupkg.sha512"
   ],

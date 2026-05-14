@@ -3,7 +3,9 @@ using ExamGuard.Core.Entities;
 using ExamGuard.Core.Enums;
 using ExamGuard.Data.Graph;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Neo4j.Driver;
@@ -16,21 +18,51 @@ public static class DataSeeder
     {
         using var scope = serviceProvider.CreateScope();
         var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var configuration = scope.ServiceProvider.GetRequiredService<IConfiguration>();
+        var environment = scope.ServiceProvider.GetRequiredService<IHostEnvironment>();
         var logger = scope.ServiceProvider.GetRequiredService<ILogger<AppDbContext>>();
 
         try
         {
-            await context.Database.MigrateAsync();
-            logger.LogInformation("Database migrated successfully.");
-
-            if (!await context.Users.AnyAsync())
+            var autoMigrate = environment.IsDevelopment() || configuration.GetValue<bool>("Database:AutoMigrate");
+            if (autoMigrate)
             {
-                await SeedUsers(context);
-                await SeedSubjectsAndCategories(context);
-                await SeedQuestions(context);
+                await context.Database.MigrateAsync();
+                logger.LogInformation("Database migrated successfully.");
+            }
+            else
+            {
+                logger.LogInformation("Automatic database migration skipped outside Development. Set Database:AutoMigrate=true to enable explicitly.");
+            }
+
+            if (!await context.SystemSettings.AnyAsync())
+            {
                 await SeedSystemSettings(context);
                 await context.SaveChangesAsync();
-                logger.LogInformation("Seed data inserted successfully.");
+                logger.LogInformation("System settings seed inserted successfully.");
+            }
+
+            var seedDemoData = environment.IsDevelopment() || configuration.GetValue<bool>("Seed:DemoData");
+            if (!await context.Users.AnyAsync() && seedDemoData)
+            {
+                var demoPassword = configuration["Seed:DemoPassword"];
+                if (string.IsNullOrWhiteSpace(demoPassword))
+                {
+                    if (!environment.IsDevelopment())
+                        throw new InvalidOperationException("Seed:DemoPassword must be configured when Seed:DemoData=true outside Development.");
+
+                    demoPassword = "Password123!";
+                }
+
+                await SeedUsers(context, demoPassword);
+                await SeedSubjectsAndCategories(context);
+                await SeedQuestions(context);
+                await context.SaveChangesAsync();
+                logger.LogInformation("Demo seed data inserted successfully.");
+            }
+            else if (!await context.Users.AnyAsync())
+            {
+                logger.LogInformation("Demo user seed skipped outside Development. Set Seed:DemoData=true with Seed:DemoPassword to enable explicitly.");
             }
             else
             {
@@ -148,9 +180,9 @@ public static class DataSeeder
         }
     }
 
-    private static async Task SeedUsers(AppDbContext context)
+    private static async Task SeedUsers(AppDbContext context, string password)
     {
-        var passwordHash = BCrypt.Net.BCrypt.HashPassword("Password123!");
+        var passwordHash = BCrypt.Net.BCrypt.HashPassword(password);
 
         var users = new List<User>
         {
@@ -270,10 +302,13 @@ public static class DataSeeder
     {
         var settings = new List<SystemSetting>
         {
+            new() { Key = "SiteName", Value = "ExamGuard", Description = "Display name of the system" },
+            new() { Key = "MaintenanceMode", Value = "false", Description = "Block non-admin business endpoints while enabled; health endpoints remain available" },
             new() { Key = "MaxTabSwitches", Value = "3", Description = "Maximum tab switches before warning" },
             new() { Key = "AutoSubmitOnTabLimit", Value = "false", Description = "Auto-submit when tab switch limit reached" },
             new() { Key = "MaxLoginAttempts", Value = "5", Description = "Max failed login attempts before lock" },
-            new() { Key = "SessionTimeoutMinutes", Value = "30", Description = "Inactive session timeout" },
+            new() { Key = "SessionTimeoutMinutes", Value = "30", Description = "Configured session timeout display value; not enforced by backend auth or exam idle timeout" },
+            new() { Key = "TabSwitchWarning", Value = "true", Description = "Frontend-only tab switch warning toggle" },
             new() { Key = "AllowCopyPaste", Value = "false", Description = "Allow copy/paste during exam" },
             new() { Key = "ShowResultToStudent", Value = "true", Description = "Default: show result after submission" },
             new() { Key = "RapidAnswerThresholdSeconds", Value = "3", Description = "Min seconds between answers to flag rapid answering" },

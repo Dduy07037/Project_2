@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("ExamGuard.Service")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+df208f3f82422a6fd08d6a32138c069378e8a38b")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+f8166954c38c0604038878f2dda6b98d516ef418")]
 [assembly: System.Reflection.AssemblyProductAttribute("ExamGuard.Service")]
 [assembly: System.Reflection.AssemblyTitleAttribute("ExamGuard.Service")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

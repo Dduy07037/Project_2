@@ -203,7 +203,7 @@ public class ExamService : IExamService
         if (!isAdmin && session.Exam.CreatedById != currentUserId)
             throw new ForbiddenException("Bạn không có quyền chỉnh sửa ca thi này.");
 
-        if (session.Status != SessionStatus.Scheduled)
+        if (ComputeSessionStatus(session.StartTime, session.EndTime, DateTime.UtcNow) != SessionStatus.Scheduled)
             throw new AppException("Chỉ có thể chỉnh sửa ca thi chưa bắt đầu.");
 
         if (request.EndTime <= request.StartTime)
@@ -230,8 +230,7 @@ public class ExamService : IExamService
         var sessions = await _db.ExamSessions
             .Include(s => s.Exam).ThenInclude(e => e.Subject)
             .Where(s => s.Exam.Status == ExamStatus.Published || s.Exam.Status == ExamStatus.Active)
-            .Where(s => s.Status == SessionStatus.Scheduled || s.Status == SessionStatus.Active)
-            .Where(s => s.EndTime > now) // Not yet ended
+            .Where(s => s.EndTime > now) // Status can be stale; availability is time-based.
             .OrderBy(s => s.StartTime)
             .ToListAsync();
 
@@ -261,7 +260,7 @@ public class ExamService : IExamService
             StartTime = s.StartTime,
             EndTime = s.EndTime,
             RequiresPassword = !string.IsNullOrEmpty(s.Password),
-            Status = s.StartTime <= now && s.EndTime > now ? "Active" : "Scheduled",
+            Status = ComputeSessionStatus(s.StartTime, s.EndTime, now).ToString(),
             HasExistingAttempt = existingAttempts.Any(a => a.SessionId == s.Id),
             AttemptId = existingAttempts.FirstOrDefault(a => a.SessionId == s.Id)?.Id,
             AttemptStatus = existingAttempts.FirstOrDefault(a => a.SessionId == s.Id)?.Status.ToString(),
@@ -305,8 +304,16 @@ public class ExamService : IExamService
         StartTime = s.StartTime,
         EndTime = s.EndTime,
         MaxParticipants = s.MaxParticipants,
-        CurrentParticipants = s.Attempts?.Count ?? 0,
-        Status = s.Status.ToString(),
+        CurrentParticipants = s.Attempts?.Count(a => a.Status == AttemptStatus.InProgress) ?? 0,
+        Status = ComputeSessionStatus(s.StartTime, s.EndTime, DateTime.UtcNow).ToString(),
         HasPassword = !string.IsNullOrEmpty(s.Password)
     };
+
+    private static SessionStatus ComputeSessionStatus(DateTime startTime, DateTime endTime, DateTime now)
+    {
+        if (now < startTime)
+            return SessionStatus.Scheduled;
+
+        return now <= endTime ? SessionStatus.Active : SessionStatus.Completed;
+    }
 }
